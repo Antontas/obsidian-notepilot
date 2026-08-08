@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: QoderChatSettings = {
 	apiKey: "",
 	model: PROVIDER_PRESETS.dashscope.model,
 	systemPrompt:
-		"你是 Qoder Chat，一个集成在 Obsidian 中的 AI 编程与写作助手。请用中文回答，回答简洁、准确，必要时使用 Markdown 格式。",
+		"你是 Qoder Clone，一个集成在 Obsidian 中的 AI 编程与写作助手。请用中文回答，回答简洁、准确，必要时使用 Markdown 格式。",
 	temperature: 0.7,
 	maxTokens: 2048,
 	stream: true,

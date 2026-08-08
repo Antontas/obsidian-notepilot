@@ -45,7 +45,7 @@ export function sessionToMarkdown(session: ChatSession): string {
 		if (m.role === "user") {
 			lines.push("**用户：**", "", m.content, "");
 		} else if (m.role === "assistant") {
-			lines.push("**Qoder Chat：**", "", m.content, "");
+			lines.push("**Qoder Clone：**", "", m.content, "");
 		} else {
 			lines.push(`> ⚠️ ${m.content}`, "");
 		}

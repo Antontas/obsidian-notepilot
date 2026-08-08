@@ -63,7 +63,7 @@ var DEFAULT_SETTINGS = {
   baseUrl: PROVIDER_PRESETS.dashscope.baseUrl,
   apiKey: "",
   model: PROVIDER_PRESETS.dashscope.model,
-  systemPrompt: "\u4F60\u662F Qoder Chat\uFF0C\u4E00\u4E2A\u96C6\u6210\u5728 Obsidian \u4E2D\u7684 AI \u7F16\u7A0B\u4E0E\u5199\u4F5C\u52A9\u624B\u3002\u8BF7\u7528\u4E2D\u6587\u56DE\u7B54\uFF0C\u56DE\u7B54\u7B80\u6D01\u3001\u51C6\u786E\uFF0C\u5FC5\u8981\u65F6\u4F7F\u7528 Markdown \u683C\u5F0F\u3002",
+  systemPrompt: "\u4F60\u662F Qoder Clone\uFF0C\u4E00\u4E2A\u96C6\u6210\u5728 Obsidian \u4E2D\u7684 AI \u7F16\u7A0B\u4E0E\u5199\u4F5C\u52A9\u624B\u3002\u8BF7\u7528\u4E2D\u6587\u56DE\u7B54\uFF0C\u56DE\u7B54\u7B80\u6D01\u3001\u51C6\u786E\uFF0C\u5FC5\u8981\u65F6\u4F7F\u7528 Markdown \u683C\u5F0F\u3002",
   temperature: 0.7,
   maxTokens: 2048,
   stream: true,
@@ -100,7 +100,7 @@ function sessionToMarkdown(session) {
     if (m.role === "user") {
       lines.push("**\u7528\u6237\uFF1A**", "", m.content, "");
     } else if (m.role === "assistant") {
-      lines.push("**Qoder Chat\uFF1A**", "", m.content, "");
+      lines.push("**Qoder Clone\uFF1A**", "", m.content, "");
     } else {
       lines.push(`> \u26A0\uFE0F ${m.content}`, "");
     }
@@ -343,7 +343,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     return VIEW_TYPE_QODER_CHAT;
   }
   getDisplayText() {
-    return "Qoder Chat";
+    return "Qoder Clone";
   }
   getIcon() {
     return "bot";
@@ -378,7 +378,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     const logo = card.createDiv({ cls: "qoder-logo" });
     (0, import_obsidian.setIcon)(logo, "bot");
     card.createEl("div", { cls: "qoder-logo-text", text: "Qoder" });
-    card.createEl("h2", { cls: "qoder-login-title", text: "\u767B\u5F55 Qoder Chat" });
+    card.createEl("h2", { cls: "qoder-login-title", text: "\u767B\u5F55 Qoder Clone" });
     card.createEl("p", {
       cls: "qoder-login-desc",
       text: "\u4F7F\u7528\u963F\u91CC\u4E91\u767E\u70BC\uFF08DashScope\uFF09\u51ED\u8BC1\u767B\u5F55\uFF0C\u5BC6\u94A5\u4EC5\u4FDD\u5B58\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
@@ -422,7 +422,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       const result = await verifyApiKey(this.plugin.settings);
       loginBtn.disabled = false;
       if (result.ok) {
-        new import_obsidian.Notice("Qoder Chat \u767B\u5F55\u6210\u529F");
+        new import_obsidian.Notice("Qoder Clone \u767B\u5F55\u6210\u529F");
         await this.plugin.saveAll();
         this.plugin.updateStatusBar();
         this.render();
@@ -550,10 +550,10 @@ var QoderChatView = class extends import_obsidian.ItemView {
     const session = this.plugin.sessions.find((x) => x.id === id);
     if (!session) return;
     const safe = session.title.replace(/[\\/:*?"<>|#^\[\]]/g, "").slice(0, 40);
-    let path = `Qoder Chat ${safe}.md`;
+    let path = `Qoder Clone ${safe}.md`;
     let n = 1;
     while (this.app.vault.getAbstractFileByPath(path)) {
-      path = `Qoder Chat ${safe} ${n++}.md`;
+      path = `Qoder Clone ${safe} ${n++}.md`;
     }
     const file = await this.app.vault.create(path, sessionToMarkdown(session));
     new import_obsidian.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
@@ -565,7 +565,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     const header = root.createDiv({ cls: "qoder-header" });
     const title = header.createDiv({ cls: "qoder-header-title" });
     (0, import_obsidian.setIcon)(title, "bot");
-    title.createSpan({ text: "Qoder Chat" });
+    title.createSpan({ text: "Qoder Clone" });
     header.createDiv({ cls: "qoder-toolbar-spacer" });
     const historyBtn = header.createEl("button", {
       cls: "qoder-icon-btn",
@@ -660,7 +660,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     w.createDiv({ cls: "qoder-welcome-hi", text: "\u4F60\u597D \u{1F44B}" });
     w.createDiv({
       cls: "qoder-welcome-sub",
-      text: "\u6211\u662F Qoder Chat\uFF0C\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002\u8F93\u5165 @ \u53EF\u5F15\u7528\u5E93\u5185\u7B14\u8BB0\u3002"
+      text: "\u6211\u662F Qoder Clone\uFF0C\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002\u8F93\u5165 @ \u53EF\u5F15\u7528\u5E93\u5185\u7B14\u8BB0\u3002"
     });
     const grid = w.createDiv({ cls: "qoder-suggestions" });
     for (const s of SUGGESTIONS) {
@@ -1057,17 +1057,17 @@ var QoderChatPlugin = class extends import_obsidian2.Plugin {
     );
     this.statusBarEl = this.addStatusBarItem();
     this.updateStatusBar();
-    this.addRibbonIcon("bot", "\u6253\u5F00 Qoder Chat", () => {
+    this.addRibbonIcon("bot", "\u6253\u5F00 Qoder Clone", () => {
       void this.activateView();
     });
     this.addCommand({
       id: "open-qoder-chat",
-      name: "\u6253\u5F00 Qoder Chat \u9762\u677F",
+      name: "\u6253\u5F00 Qoder Clone \u9762\u677F",
       callback: () => void this.activateView()
     });
     this.addCommand({
       id: "new-qoder-chat",
-      name: "\u65B0\u5EFA Qoder Chat \u5BF9\u8BDD",
+      name: "\u65B0\u5EFA Qoder Clone \u5BF9\u8BDD",
       callback: () => {
         this.newSession();
         this.refreshView();
@@ -1080,13 +1080,13 @@ var QoderChatPlugin = class extends import_obsidian2.Plugin {
     });
     this.addCommand({
       id: "logout-qoder-chat",
-      name: "\u9000\u51FA Qoder Chat \u767B\u5F55",
+      name: "\u9000\u51FA Qoder Clone \u767B\u5F55",
       callback: () => {
         this.settings.apiKey = "";
         void this.saveAll();
         this.updateStatusBar();
         this.refreshView();
-        new import_obsidian2.Notice("\u5DF2\u9000\u51FA Qoder Chat \u767B\u5F55");
+        new import_obsidian2.Notice("\u5DF2\u9000\u51FA Qoder Clone \u767B\u5F55");
       }
     });
     this.addSettingTab(new QoderChatSettingTab(this.app, this));
@@ -1168,7 +1168,7 @@ var QoderChatPlugin = class extends import_obsidian2.Plugin {
   /** Inline Chat：选中文本 → 指令 → AI 改写 → Diff 预览 → 应用 */
   async inlineChat(editor, view) {
     if (!this.isLoggedIn()) {
-      new import_obsidian2.Notice("\u8BF7\u5148\u767B\u5F55 Qoder Chat");
+      new import_obsidian2.Notice("\u8BF7\u5148\u767B\u5F55 Qoder Clone");
       return;
     }
     const sel = editor.getSelection();
@@ -1178,7 +1178,7 @@ var QoderChatPlugin = class extends import_obsidian2.Plugin {
     }
     const instruction = await new InstructionModal(this.app).openAndWait();
     if (instruction === null) return;
-    new import_obsidian2.Notice("Qoder Chat \u6B63\u5728\u6539\u5199\u2026");
+    new import_obsidian2.Notice("Qoder Clone \u6B63\u5728\u6539\u5199\u2026");
     let result;
     try {
       result = await this.complete([
@@ -1329,7 +1329,7 @@ var QoderChatSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Qoder Chat \u8BBE\u7F6E" });
+    containerEl.createEl("h2", { text: "Qoder Clone \u8BBE\u7F6E" });
     new import_obsidian2.Setting(containerEl).setName("\u767B\u5F55\u72B6\u6001").setDesc(
       this.plugin.isLoggedIn() ? `\u5DF2\u767B\u5F55\uFF08\u6A21\u578B\uFF1A${this.plugin.settings.model}\uFF09` : "\u672A\u767B\u5F55\uFF0C\u8BF7\u5728\u804A\u5929\u9762\u677F\u767B\u5F55\u9875\u8F93\u5165\u51ED\u8BC1"
     );

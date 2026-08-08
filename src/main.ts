@@ -1,4 +1,4 @@
-// Qoder Chat —— 插件主入口
+// Qoder Clone —— 插件主入口
 // UI/架构参照 Continue（Apache 2.0, github.com/continuedev/continue）独立实现
 
 import type { Editor, WorkspaceLeaf } from "obsidian";
@@ -87,19 +87,19 @@ export default class QoderChatPlugin extends Plugin {
 		this.statusBarEl = this.addStatusBarItem();
 		this.updateStatusBar();
 
-		this.addRibbonIcon("bot", "打开 Qoder Chat", () => {
+		this.addRibbonIcon("bot", "打开 Qoder Clone", () => {
 			void this.activateView();
 		});
 
 		this.addCommand({
 			id: "open-qoder-chat",
-			name: "打开 Qoder Chat 面板",
+			name: "打开 Qoder Clone 面板",
 			callback: () => void this.activateView(),
 		});
 
 		this.addCommand({
 			id: "new-qoder-chat",
-			name: "新建 Qoder Chat 对话",
+			name: "新建 Qoder Clone 对话",
 			callback: () => {
 				this.newSession();
 				this.refreshView();
@@ -115,13 +115,13 @@ export default class QoderChatPlugin extends Plugin {
 
 		this.addCommand({
 			id: "logout-qoder-chat",
-			name: "退出 Qoder Chat 登录",
+			name: "退出 Qoder Clone 登录",
 			callback: () => {
 				this.settings.apiKey = "";
 				void this.saveAll();
 				this.updateStatusBar();
 				this.refreshView();
-				new Notice("已退出 Qoder Chat 登录");
+				new Notice("已退出 Qoder Clone 登录");
 			},
 		});
 
@@ -218,7 +218,7 @@ export default class QoderChatPlugin extends Plugin {
 	/** Inline Chat：选中文本 → 指令 → AI 改写 → Diff 预览 → 应用 */
 	async inlineChat(editor: Editor, view: MarkdownView): Promise<void> {
 		if (!this.isLoggedIn()) {
-			new Notice("请先登录 Qoder Chat");
+			new Notice("请先登录 Qoder Clone");
 			return;
 		}
 		const sel = editor.getSelection();
@@ -230,7 +230,7 @@ export default class QoderChatPlugin extends Plugin {
 		const instruction = await new InstructionModal(this.app).openAndWait();
 		if (instruction === null) return;
 
-		new Notice("Qoder Chat 正在改写…");
+		new Notice("Qoder Clone 正在改写…");
 		let result: string;
 		try {
 			result = await this.complete([
@@ -403,7 +403,7 @@ class QoderChatSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Qoder Chat 设置" });
+		containerEl.createEl("h2", { text: "Qoder Clone 设置" });
 
 		new Setting(containerEl)
 			.setName("登录状态")

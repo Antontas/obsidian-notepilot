@@ -1,6 +1,6 @@
-# Qoder Chat for Obsidian
+# Qoder Clone for Obsidian
 
-仿 Qoder 的 AI 聊天助手 Obsidian 插件：侧边栏对话面板、流式输出、多会话管理、BYOK（自带 API Key，兼容 OpenAI / 阿里云百炼 DashScope 接口）。
+仿 Qoder 的 AI 聊天助手 Obsidian 插件（Qoder Clone）：侧边栏对话面板、流式输出、多会话管理、BYOK（自带 API Key，兼容 OpenAI / 阿里云百炼 DashScope 接口）。
 
 界面与交互设计参照开源项目 [Continue](https://github.com/continuedev/continue)（Apache 2.0），代码为独立实现。
 
@@ -26,7 +26,7 @@
 <你的库>/.obsidian/plugins/obsidian-qoder-chat/
 ```
 
-然后在 Obsidian 中：设置 → 第三方插件 → 关闭安全模式 → 启用 Qoder Chat。
+然后在 Obsidian 中：设置 → 第三方插件 → 关闭安全模式 → 启用 Qoder Clone。
 
 ### 从源码构建
 

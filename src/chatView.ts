@@ -1,4 +1,4 @@
-// Qoder Chat —— 侧边栏视图（登录 / 历史会话 / 聊天）
+// Qoder Clone —— 侧边栏视图（登录 / 历史会话 / 聊天）
 // 界面与交互参照 Continue（Apache 2.0）独立实现
 
 import {
@@ -49,7 +49,7 @@ export class QoderChatView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "Qoder Chat";
+		return "Qoder Clone";
 	}
 
 	getIcon(): string {
@@ -92,7 +92,7 @@ export class QoderChatView extends ItemView {
 		const logo = card.createDiv({ cls: "qoder-logo" });
 		setIcon(logo, "bot");
 		card.createEl("div", { cls: "qoder-logo-text", text: "Qoder" });
-		card.createEl("h2", { cls: "qoder-login-title", text: "登录 Qoder Chat" });
+		card.createEl("h2", { cls: "qoder-login-title", text: "登录 Qoder Clone" });
 		card.createEl("p", {
 			cls: "qoder-login-desc",
 			text: "使用阿里云百炼（DashScope）凭证登录，密钥仅保存在本机 Obsidian 配置中。",
@@ -142,7 +142,7 @@ export class QoderChatView extends ItemView {
 			const result = await verifyApiKey(this.plugin.settings);
 			loginBtn.disabled = false;
 			if (result.ok) {
-				new Notice("Qoder Chat 登录成功");
+				new Notice("Qoder Clone 登录成功");
 				await this.plugin.saveAll();
 				this.plugin.updateStatusBar();
 				this.render();
@@ -285,10 +285,10 @@ export class QoderChatView extends ItemView {
 		const session = this.plugin.sessions.find((x) => x.id === id);
 		if (!session) return;
 		const safe = session.title.replace(/[\\/:*?"<>|#^\[\]]/g, "").slice(0, 40);
-		let path = `Qoder Chat ${safe}.md`;
+		let path = `Qoder Clone ${safe}.md`;
 		let n = 1;
 		while (this.app.vault.getAbstractFileByPath(path)) {
-			path = `Qoder Chat ${safe} ${n++}.md`;
+			path = `Qoder Clone ${safe} ${n++}.md`;
 		}
 		const file = await this.app.vault.create(path, sessionToMarkdown(session));
 		new Notice(`已导出：${path}`);
@@ -302,7 +302,7 @@ export class QoderChatView extends ItemView {
 		const header = root.createDiv({ cls: "qoder-header" });
 		const title = header.createDiv({ cls: "qoder-header-title" });
 		setIcon(title, "bot");
-		title.createSpan({ text: "Qoder Chat" });
+		title.createSpan({ text: "Qoder Clone" });
 		header.createDiv({ cls: "qoder-toolbar-spacer" });
 
 		const historyBtn = header.createEl("button", {
@@ -415,7 +415,7 @@ export class QoderChatView extends ItemView {
 		w.createDiv({ cls: "qoder-welcome-hi", text: "你好 👋" });
 		w.createDiv({
 			cls: "qoder-welcome-sub",
-			text: "我是 Qoder Chat，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
+			text: "我是 Qoder Clone，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
 		});
 		const grid = w.createDiv({ cls: "qoder-suggestions" });
 		for (const s of SUGGESTIONS) {
