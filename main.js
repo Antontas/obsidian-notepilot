@@ -328,26 +328,47 @@ ${r.content}`).join("\n\n");
 
 // src/fileTools.ts
 var import_obsidian = require("obsidian");
+var EDIT_ACTIONS = [
+  "create",
+  "write",
+  "replace"
+];
+function validateEdit(obj) {
+  if (!obj.path || !obj.action) {
+    throw new Error("\u7F3A\u5C11 path \u6216 action \u5B57\u6BB5");
+  }
+  if (obj.action === "replace" && (obj.search === void 0 || obj.replace === void 0)) {
+    throw new Error("replace \u9700\u8981 search \u4E0E replace \u5B57\u6BB5");
+  }
+  if ((obj.action === "create" || obj.action === "write") && obj.content === void 0) {
+    throw new Error(`${obj.action} \u9700\u8981 content \u5B57\u6BB5`);
+  }
+}
 function parseEditBlocks(text) {
   const out = [];
-  const re = /```qoder-edit\s*\n([\s\S]*?)```/g;
+  const re = /```([^\n`]*)\n([\s\S]*?)```/g;
   let m;
   while ((m = re.exec(text)) !== null) {
-    const raw = m[1].trim();
+    const lang = m[1].trim().toLowerCase();
+    let body = m[2].trim();
+    const isEditFence = lang === "qoder-edit" || lang === "qoder_edit";
+    const firstLine = body.split("\n", 1)[0].trim();
+    if (!isEditFence && /^qoder[-_ ]?edit$/i.test(firstLine)) {
+      body = body.slice(firstLine.length).trim();
+    }
+    if (!isEditFence && !body.startsWith("{")) continue;
     try {
-      const obj = JSON.parse(raw);
-      if (!obj.path || !obj.action) {
-        throw new Error("\u7F3A\u5C11 path \u6216 action \u5B57\u6BB5");
+      const obj = JSON.parse(body);
+      if (!isEditFence) {
+        const shapeOk = typeof obj.path === "string" && EDIT_ACTIONS.includes(obj.action);
+        if (!shapeOk) continue;
       }
-      if (obj.action === "replace" && (obj.search === void 0 || obj.replace === void 0)) {
-        throw new Error("replace \u9700\u8981 search \u4E0E replace \u5B57\u6BB5");
-      }
-      if ((obj.action === "create" || obj.action === "write") && obj.content === void 0) {
-        throw new Error(`${obj.action} \u9700\u8981 content \u5B57\u6BB5`);
-      }
-      out.push({ raw, edit: obj, error: null });
+      validateEdit(obj);
+      out.push({ raw: body, edit: obj, error: null });
     } catch (e) {
-      out.push({ raw, edit: null, error: e.message });
+      if (isEditFence) {
+        out.push({ raw: body, edit: null, error: e.message });
+      }
     }
   }
   return out;
@@ -398,11 +419,16 @@ async function applyEdit(app, edit) {
 function agentToolPrompt(app) {
   const files = app.vault.getMarkdownFiles().filter((f) => !f.path.startsWith(".obsidian/")).slice(0, 300).map((f) => f.path);
   return [
-    "\u4F60\u5F53\u524D\u5904\u4E8E Agent \u6A21\u5F0F\uFF0C\u5177\u5907\u4FEE\u6539\u672C\u5730\u6587\u4EF6\u7684\u80FD\u529B\u3002\u5F53\u7528\u6237\u8981\u6C42\u521B\u5EFA\u3001\u4FEE\u6539\u6216\u66F4\u65B0\u7B14\u8BB0\u65F6\uFF0C\u8BF7\u5728\u6587\u5B57\u56DE\u590D\u4E4B\u540E\u8F93\u51FA\u4E00\u4E2A\u6216\u591A\u4E2A qoder-edit \u4EE3\u7801\u5757\uFF0C\u5757\u5185\u4E3A\u4E25\u683C JSON\uFF1A",
+    "\u4F60\u5F53\u524D\u5904\u4E8E Agent \u6A21\u5F0F\uFF0C\u5177\u5907\u4FEE\u6539\u672C\u5730\u6587\u4EF6\u7684\u80FD\u529B\u3002\u5F53\u7528\u6237\u8981\u6C42\u521B\u5EFA\u3001\u4FEE\u6539\u6216\u66F4\u65B0\u7B14\u8BB0\u65F6\uFF0C\u8BF7\u5728\u6587\u5B57\u56DE\u590D\u4E4B\u540E\u8F93\u51FA\u4E00\u4E2A\u6216\u591A\u4E2A\u7F16\u8F91\u5757\u3002",
+    "\u7F16\u8F91\u5757\u683C\u5F0F\u5FC5\u987B\u4E25\u683C\u4E3A\uFF1A\u4E09\u4E2A\u53CD\u5F15\u53F7 + qoder-edit \u4F5C\u4E3A\u56F4\u680F\u8BED\u8A00\uFF0C\u5757\u5185\u4E3A\u5355\u884C\u6216\u591A\u884C\u7684\u4E25\u683C JSON\u3002\u793A\u4F8B\uFF1A",
+    "```qoder-edit",
+    '{"action":"replace","path":"\u7B14\u8BB0.md","search":"\u88AB\u66FF\u6362\u7684\u539F\u6587","replace":"\u65B0\u5185\u5BB9"}',
+    "```",
+    "\u4E09\u79CD action\uFF1A",
     '- \u66FF\u6362\u6587\u4EF6\u4E2D\u7684\u90E8\u5206\u5185\u5BB9\uFF1A{"action":"replace","path":"\u7B14\u8BB0.md","search":"\u88AB\u66FF\u6362\u7684\u539F\u6587\uFF08\u5FC5\u987B\u4E0E\u6587\u4EF6\u5185\u5BB9\u5B8C\u5168\u4E00\u81F4\uFF09","replace":"\u65B0\u5185\u5BB9"}',
     '- \u521B\u5EFA\u65B0\u6587\u4EF6\uFF1A{"action":"create","path":"\u76EE\u5F55/\u65B0\u6587\u4EF6.md","content":"\u5B8C\u6574\u5185\u5BB9"}',
     '- \u8986\u5199\u6574\u4E2A\u6587\u4EF6\uFF1A{"action":"write","path":"\u7B14\u8BB0.md","content":"\u5B8C\u6574\u5185\u5BB9"}',
-    "\u89C4\u5219\uFF1Apath \u4E3A\u76F8\u5BF9\u5E93\u6839\u76EE\u5F55\u7684\u8DEF\u5F84\uFF1BJSON \u5FC5\u987B\u5408\u6CD5\u4E14\u6B63\u786E\u8F6C\u4E49\u6362\u884C\u4E0E\u5F15\u53F7\uFF1B\u6240\u6709\u4FEE\u6539\u90FD\u4F1A\u5148\u5C55\u793A\u7ED9\u7528\u6237\u5BA1\u6279\u540E\u624D\u751F\u6548\uFF0C\u56E0\u6B64\u53EF\u653E\u5FC3\u8F93\u51FA\uFF1B\u80FD\u4F7F\u7528 replace \u65F6\u4F18\u5148\u4F7F\u7528 replace\u3002",
+    "\u89C4\u5219\uFF1A\u56F4\u680F\u8BED\u8A00\u5FC5\u987B\u662F qoder-edit\uFF0C\u4E0D\u5F97\u6539\u7528 json \u6216\u5176\u4ED6\u8BED\u8A00\uFF1Bpath \u4E3A\u76F8\u5BF9\u5E93\u6839\u76EE\u5F55\u7684\u8DEF\u5F84\uFF1BJSON \u5FC5\u987B\u5408\u6CD5\u4E14\u6B63\u786E\u8F6C\u4E49\u6362\u884C\u4E0E\u5F15\u53F7\uFF1B\u6240\u6709\u4FEE\u6539\u90FD\u4F1A\u5148\u5C55\u793A\u7ED9\u7528\u6237\u5BA1\u6279\u540E\u624D\u751F\u6548\uFF0C\u56E0\u6B64\u53EF\u653E\u5FC3\u8F93\u51FA\uFF1B\u80FD\u4F7F\u7528 replace \u65F6\u4F18\u5148\u4F7F\u7528 replace\u3002",
     files.length > 0 ? `\u5F53\u524D\u5E93\u5185\u7684 Markdown \u6587\u4EF6\u5217\u8868\uFF1A
 ${files.join("\n")}` : "\u5F53\u524D\u5E93\u5185\u6682\u65E0 Markdown \u6587\u4EF6\u3002"
   ].join("\n");

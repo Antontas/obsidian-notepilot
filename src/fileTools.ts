@@ -17,33 +17,70 @@ export interface ParsedEdit {
 	error: string | null;
 }
 
-/** 从回复文本中解析所有 ```qoder-edit 代码块 */
+const EDIT_ACTIONS: ReadonlyArray<EditBlock["action"]> = [
+	"create",
+	"write",
+	"replace",
+];
+
+function validateEdit(obj: EditBlock): void {
+	if (!obj.path || !obj.action) {
+		throw new Error("缺少 path 或 action 字段");
+	}
+	if (
+		obj.action === "replace" &&
+		(obj.search === undefined || obj.replace === undefined)
+	) {
+		throw new Error("replace 需要 search 与 replace 字段");
+	}
+	if (
+		(obj.action === "create" || obj.action === "write") &&
+		obj.content === undefined
+	) {
+		throw new Error(`${obj.action} 需要 content 字段`);
+	}
+}
+
+/**
+ * 从回复文本中解析所有编辑块。
+ * 兼容模型可能产出的三种写法：
+ * 1. ```qoder-edit 围栏（标准）
+ * 2. 普通围栏，块内首行写了 qoder-edit
+ * 3. 普通 json 围栏，内容形状符合 EditBlock（仅形状匹配才认定，避免误伤普通 JSON 示例）
+ */
 export function parseEditBlocks(text: string): ParsedEdit[] {
 	const out: ParsedEdit[] = [];
-	const re = /```qoder-edit\s*\n([\s\S]*?)```/g;
+	const re = /```([^\n`]*)\n([\s\S]*?)```/g;
 	let m: RegExpExecArray | null;
 	while ((m = re.exec(text)) !== null) {
-		const raw = m[1].trim();
+		const lang = m[1].trim().toLowerCase();
+		let body = m[2].trim();
+		const isEditFence = lang === "qoder-edit" || lang === "qoder_edit";
+
+		// 语言名被写在块内首行的情况
+		const firstLine = body.split("\n", 1)[0].trim();
+		if (!isEditFence && /^qoder[-_ ]?edit$/i.test(firstLine)) {
+			body = body.slice(firstLine.length).trim();
+		}
+
+		if (!isEditFence && !body.startsWith("{")) continue;
+
 		try {
-			const obj = JSON.parse(raw) as EditBlock;
-			if (!obj.path || !obj.action) {
-				throw new Error("缺少 path 或 action 字段");
+			const obj = JSON.parse(body) as EditBlock;
+			// 非标准围栏：形状不像编辑指令时静默跳过，避免误伤普通 JSON 示例
+			if (!isEditFence) {
+				const shapeOk =
+					typeof obj.path === "string" &&
+					(EDIT_ACTIONS as readonly string[]).includes(obj.action);
+				if (!shapeOk) continue;
 			}
-			if (
-				obj.action === "replace" &&
-				(obj.search === undefined || obj.replace === undefined)
-			) {
-				throw new Error("replace 需要 search 与 replace 字段");
-			}
-			if (
-				(obj.action === "create" || obj.action === "write") &&
-				obj.content === undefined
-			) {
-				throw new Error(`${obj.action} 需要 content 字段`);
-			}
-			out.push({ raw, edit: obj, error: null });
+			validateEdit(obj);
+			out.push({ raw: body, edit: obj, error: null });
 		} catch (e) {
-			out.push({ raw, edit: null, error: (e as Error).message });
+			// 只有显式 qoder-edit 围栏解析失败才报错展示
+			if (isEditFence) {
+				out.push({ raw: body, edit: null, error: (e as Error).message });
+			}
 		}
 	}
 	return out;
@@ -112,11 +149,16 @@ export function agentToolPrompt(app: App): string {
 		.map((f) => f.path);
 
 	return [
-		"你当前处于 Agent 模式，具备修改本地文件的能力。当用户要求创建、修改或更新笔记时，请在文字回复之后输出一个或多个 qoder-edit 代码块，块内为严格 JSON：",
+		"你当前处于 Agent 模式，具备修改本地文件的能力。当用户要求创建、修改或更新笔记时，请在文字回复之后输出一个或多个编辑块。",
+		"编辑块格式必须严格为：三个反引号 + qoder-edit 作为围栏语言，块内为单行或多行的严格 JSON。示例：",
+		"```qoder-edit",
+		'{"action":"replace","path":"笔记.md","search":"被替换的原文","replace":"新内容"}',
+		"```",
+		"三种 action：",
 		'- 替换文件中的部分内容：{"action":"replace","path":"笔记.md","search":"被替换的原文（必须与文件内容完全一致）","replace":"新内容"}',
 		'- 创建新文件：{"action":"create","path":"目录/新文件.md","content":"完整内容"}',
 		'- 覆写整个文件：{"action":"write","path":"笔记.md","content":"完整内容"}',
-		"规则：path 为相对库根目录的路径；JSON 必须合法且正确转义换行与引号；所有修改都会先展示给用户审批后才生效，因此可放心输出；能使用 replace 时优先使用 replace。",
+		"规则：围栏语言必须是 qoder-edit，不得改用 json 或其他语言；path 为相对库根目录的路径；JSON 必须合法且正确转义换行与引号；所有修改都会先展示给用户审批后才生效，因此可放心输出；能使用 replace 时优先使用 replace。",
 		files.length > 0
 			? `当前库内的 Markdown 文件列表：\n${files.join("\n")}`
 			: "当前库内暂无 Markdown 文件。",

@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-qoder-chat",
 	"name": "Qoder Clone",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"minAppVersion": "1.5.0",
 	"description": "Qoder Clone（仿 Qoder）：侧边栏 AI 聊天助手，支持流式输出、多会话、@上下文、Inline Chat、Rules、Agent 文件修改（Diff 审批），BYOK 兼容 OpenAI / 阿里云百炼 DashScope 接口。",
 	"author": "local",
