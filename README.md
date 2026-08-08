@@ -15,6 +15,7 @@
 - **代码块操作**：回复中的代码块支持一键复制、插入当前笔记
 - **Inline Chat**：编辑器选中文本 → 输入改写指令 → Diff 预览（绿加/红删）→ 接受后应用
 - **Rules 规则**：库根目录 `.qoder-rules/*.md` 中的规则自动注入对话，支持 frontmatter `alwaysApply: false` 关闭单条
+- **Agent 文件修改**：开启 Agent 模式后，AI 可输出文件编辑指令（创建/覆写/局部替换），以 Diff 审批卡片展示，用户确认后才会真正修改库内文件
 
 ## 安装
 
@@ -41,6 +42,7 @@ npm run build
 2. 输入阿里云百炼 API Key（[获取地址](https://bailian.console.aliyun.com/)），点击登录
 3. 登录后即可对话；输入 `@` 引用库内笔记；在输入框上方切换模型
 4. Inline Chat：选中笔记文本 → 命令面板执行「Inline Chat：AI 改写选中文本」
+5. Agent 文件修改：点击输入框旁「Agent」按钮开启 → 直接要求 AI 修改/创建笔记 → 回复中以审批卡片展示修改内容 → 点击「应用」或「拒绝」
 
 ### Rules 示例
 

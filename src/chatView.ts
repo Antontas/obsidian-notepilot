@@ -19,6 +19,8 @@ import {
 import { PROVIDER_MODELS, SUGGESTIONS } from "./settings";
 import { chatCompletion, verifyApiKey, LlmRequestMessage } from "./llm";
 import { loadRules } from "./rules";
+import { agentToolPrompt, applyEdit, parseEditBlocks } from "./fileTools";
+import { lineDiff } from "./diff";
 
 export const VIEW_TYPE_QODER_CHAT = "qoder-chat-view";
 
@@ -376,6 +378,26 @@ export class QoderChatView extends ItemView {
 			badge.setAttribute("title", "提问时将附带当前笔记内容");
 		}
 
+		// Agent 模式开关：开启后 AI 可提出文件修改建议（需审批）
+		const agentBtn = toolbar.createEl("button", {
+			cls: "qoder-mode-btn",
+			text: "⚡ Agent",
+		});
+		agentBtn.setAttribute("title", "Agent 模式：AI 可建议创建/修改库内文件（需你审批）");
+		const syncAgentBtn = () =>
+			agentBtn.toggleClass("qoder-mode-on", this.plugin.settings.agentMode);
+		syncAgentBtn();
+		agentBtn.addEventListener("click", () => {
+			this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
+			void this.plugin.saveAll();
+			syncAgentBtn();
+			new Notice(
+				this.plugin.settings.agentMode
+					? "Agent 模式已开启：AI 可提出文件修改建议"
+					: "Agent 模式已关闭"
+			);
+		});
+
 		toolbar.createDiv({ cls: "qoder-toolbar-spacer" });
 
 		this.stopBtn = toolbar.createEl("button", {
@@ -405,7 +427,10 @@ export class QoderChatView extends ItemView {
 		}
 		for (const msg of session.messages) {
 			const el = this.appendMessageEl(msg);
-			if (msg.role === "assistant") this.addCodeActions(el);
+			if (msg.role === "assistant") {
+				this.addCodeActions(el);
+				this.renderEditCards(el, msg.content);
+			}
 		}
 		this.scrollToBottom();
 	}
@@ -439,7 +464,10 @@ export class QoderChatView extends ItemView {
 			el.setText(msg.content);
 		} else {
 			MarkdownRenderer.render(this.app, msg.content, el, "", this)
-				.then(() => this.addCodeActions(el))
+						.then(() => {
+						this.addCodeActions(el);
+						this.renderEditCards(el, msg.content);
+					})
 				.catch(() => el.setText(msg.content));
 		}
 		return el;
@@ -477,6 +505,102 @@ export class QoderChatView extends ItemView {
 		const cursor = editor.getCursor();
 		editor.replaceRange(text + "\n", cursor);
 		new Notice("已插入到当前笔记");
+	}
+
+	// ============ 文件修改审批卡片（Agent 模式） ============
+
+	private renderEditCards(container: HTMLElement, text: string): void {
+		const parsed = parseEditBlocks(text);
+		if (parsed.length === 0) return;
+
+		const wrap = container.createDiv({ cls: "qoder-edit-cards" });
+		wrap.createDiv({
+			cls: "qoder-edit-cards-title",
+			text: `📝 检测到 ${parsed.length} 项文件修改建议，确认后生效`,
+		});
+
+		for (const p of parsed) {
+			const card = wrap.createDiv({ cls: "qoder-edit-card" });
+
+			if (!p.edit) {
+				card.createDiv({
+					cls: "qoder-edit-path",
+					text: `⚠️ 编辑块解析失败：${p.error ?? "未知错误"}`,
+				});
+				card.createEl("pre", { cls: "qoder-edit-raw", text: p.raw });
+				continue;
+			}
+
+			const edit = p.edit;
+			const head = card.createDiv({ cls: "qoder-edit-head" });
+			head.createSpan({
+				cls: `qoder-edit-action qoder-edit-action-${edit.action}`,
+				text:
+					edit.action === "replace"
+						? "替换"
+						: edit.action === "create"
+						? "新建"
+						: "覆写",
+			});
+			head.createSpan({ cls: "qoder-edit-path", text: edit.path });
+
+			// Diff 预览
+			const diffEl = card.createDiv({ cls: "qoder-edit-diff" });
+			const addDiffLine = (type: "add" | "del" | "same", lineText: string) => {
+				const row = diffEl.createDiv({
+					cls: `qoder-diff-line qoder-diff-${type}`,
+				});
+				row.createSpan({
+					cls: "qoder-diff-mark",
+					text: type === "add" ? "+" : type === "del" ? "−" : " ",
+				});
+				row.createSpan({ text: lineText || " " });
+			};
+
+			if (edit.action === "replace") {
+				for (const line of lineDiff(edit.search ?? "", edit.replace ?? "")) {
+					addDiffLine(line.type, line.text);
+				}
+			} else {
+				const allLines = (edit.content ?? "").split("\n");
+				for (const l of allLines.slice(0, 12)) addDiffLine("add", l);
+				if (allLines.length > 12) {
+					diffEl.createDiv({
+						cls: "qoder-diff-line",
+						text: `…（共 ${allLines.length} 行）`,
+					});
+				}
+			}
+
+			// 操作按钮
+			const btnRow = card.createDiv({ cls: "qoder-edit-btns" });
+			const status = btnRow.createSpan({ cls: "qoder-edit-status" });
+			const reject = btnRow.createEl("button", { text: "拒绝" });
+			const apply = btnRow.createEl("button", {
+				text: "应用",
+				cls: "mod-cta",
+			});
+
+			reject.addEventListener("click", () => {
+				reject.disabled = true;
+				apply.disabled = true;
+				status.setText("已拒绝");
+			});
+			apply.addEventListener("click", () => {
+				void (async () => {
+					apply.disabled = true;
+					try {
+						const msg = await applyEdit(this.app, edit);
+						status.setText(`✅ ${msg}`);
+						reject.disabled = true;
+						new Notice(msg);
+					} catch (e) {
+						status.setText(`❌ ${(e as Error).message}`);
+						apply.disabled = false;
+					}
+				})();
+			});
+		}
 	}
 
 	private scrollToBottom(): void {
@@ -728,6 +852,7 @@ export class QoderChatView extends ItemView {
 					assistantEl.setText("(无内容)");
 				} else {
 					this.addCodeActions(assistantEl);
+					this.renderEditCards(assistantEl, assistantMsg.content);
 				}
 				this.plugin.touchSession(session);
 				void this.plugin.saveAll();
@@ -753,6 +878,10 @@ export class QoderChatView extends ItemView {
 					content: `以下是必须遵守的规则：\n${rules}`,
 				});
 			}
+		}
+
+		if (settings.agentMode) {
+			out.push({ role: "system", content: agentToolPrompt(this.app) });
 		}
 
 		if (settings.includeActiveNote) {

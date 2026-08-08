@@ -22,7 +22,7 @@ __export(main_exports, {
   default: () => QoderChatPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // src/settings.ts
 var PROVIDER_PRESETS = {
@@ -69,7 +69,8 @@ var DEFAULT_SETTINGS = {
   stream: true,
   includeActiveNote: true,
   maxNoteChars: 8e3,
-  rulesEnabled: true
+  rulesEnabled: true,
+  agentMode: false
 };
 
 // src/sessions.ts
@@ -292,7 +293,7 @@ function lineDiff(oldText, newText) {
 }
 
 // src/chatView.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 
 // src/rules.ts
 var RULES_DIR = ".qoder-rules";
@@ -325,9 +326,91 @@ async function loadRules(app) {
 ${r.content}`).join("\n\n");
 }
 
+// src/fileTools.ts
+var import_obsidian = require("obsidian");
+function parseEditBlocks(text) {
+  const out = [];
+  const re = /```qoder-edit\s*\n([\s\S]*?)```/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const raw = m[1].trim();
+    try {
+      const obj = JSON.parse(raw);
+      if (!obj.path || !obj.action) {
+        throw new Error("\u7F3A\u5C11 path \u6216 action \u5B57\u6BB5");
+      }
+      if (obj.action === "replace" && (obj.search === void 0 || obj.replace === void 0)) {
+        throw new Error("replace \u9700\u8981 search \u4E0E replace \u5B57\u6BB5");
+      }
+      if ((obj.action === "create" || obj.action === "write") && obj.content === void 0) {
+        throw new Error(`${obj.action} \u9700\u8981 content \u5B57\u6BB5`);
+      }
+      out.push({ raw, edit: obj, error: null });
+    } catch (e) {
+      out.push({ raw, edit: null, error: e.message });
+    }
+  }
+  return out;
+}
+async function ensureFolder(app, path) {
+  const parts = path.split("/");
+  parts.pop();
+  let cur = "";
+  for (const p of parts) {
+    if (!p) continue;
+    cur = cur ? `${cur}/${p}` : p;
+    if (!app.vault.getAbstractFileByPath(cur)) {
+      await app.vault.createFolder(cur);
+    }
+  }
+}
+async function applyEdit(app, edit) {
+  var _a, _b, _c;
+  const path = edit.path.replace(/^\/+/, "");
+  if (edit.action === "create") {
+    if (app.vault.getAbstractFileByPath(path)) {
+      throw new Error(`\u6587\u4EF6\u5DF2\u5B58\u5728\uFF1A${path}`);
+    }
+    await ensureFolder(app, path);
+    await app.vault.create(path, (_a = edit.content) != null ? _a : "");
+    return `\u5DF2\u521B\u5EFA ${path}`;
+  }
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof import_obsidian.TFile)) {
+    throw new Error(`\u672A\u627E\u5230\u6587\u4EF6\uFF1A${path}`);
+  }
+  if (edit.action === "write") {
+    await app.vault.modify(file, (_b = edit.content) != null ? _b : "");
+    return `\u5DF2\u8986\u5199 ${path}`;
+  }
+  const search = (_c = edit.search) != null ? _c : "";
+  if (!search) throw new Error("search \u5185\u5BB9\u4E3A\u7A7A");
+  await app.vault.process(file, (data) => {
+    var _a2;
+    const idx = data.indexOf(search);
+    if (idx === -1) {
+      throw new Error("\u672A\u627E\u5230\u4E0E search \u5339\u914D\u7684\u539F\u6587");
+    }
+    return data.slice(0, idx) + ((_a2 = edit.replace) != null ? _a2 : "") + data.slice(idx + search.length);
+  });
+  return `\u5DF2\u4FEE\u6539 ${path}`;
+}
+function agentToolPrompt(app) {
+  const files = app.vault.getMarkdownFiles().filter((f) => !f.path.startsWith(".obsidian/")).slice(0, 300).map((f) => f.path);
+  return [
+    "\u4F60\u5F53\u524D\u5904\u4E8E Agent \u6A21\u5F0F\uFF0C\u5177\u5907\u4FEE\u6539\u672C\u5730\u6587\u4EF6\u7684\u80FD\u529B\u3002\u5F53\u7528\u6237\u8981\u6C42\u521B\u5EFA\u3001\u4FEE\u6539\u6216\u66F4\u65B0\u7B14\u8BB0\u65F6\uFF0C\u8BF7\u5728\u6587\u5B57\u56DE\u590D\u4E4B\u540E\u8F93\u51FA\u4E00\u4E2A\u6216\u591A\u4E2A qoder-edit \u4EE3\u7801\u5757\uFF0C\u5757\u5185\u4E3A\u4E25\u683C JSON\uFF1A",
+    '- \u66FF\u6362\u6587\u4EF6\u4E2D\u7684\u90E8\u5206\u5185\u5BB9\uFF1A{"action":"replace","path":"\u7B14\u8BB0.md","search":"\u88AB\u66FF\u6362\u7684\u539F\u6587\uFF08\u5FC5\u987B\u4E0E\u6587\u4EF6\u5185\u5BB9\u5B8C\u5168\u4E00\u81F4\uFF09","replace":"\u65B0\u5185\u5BB9"}',
+    '- \u521B\u5EFA\u65B0\u6587\u4EF6\uFF1A{"action":"create","path":"\u76EE\u5F55/\u65B0\u6587\u4EF6.md","content":"\u5B8C\u6574\u5185\u5BB9"}',
+    '- \u8986\u5199\u6574\u4E2A\u6587\u4EF6\uFF1A{"action":"write","path":"\u7B14\u8BB0.md","content":"\u5B8C\u6574\u5185\u5BB9"}',
+    "\u89C4\u5219\uFF1Apath \u4E3A\u76F8\u5BF9\u5E93\u6839\u76EE\u5F55\u7684\u8DEF\u5F84\uFF1BJSON \u5FC5\u987B\u5408\u6CD5\u4E14\u6B63\u786E\u8F6C\u4E49\u6362\u884C\u4E0E\u5F15\u53F7\uFF1B\u6240\u6709\u4FEE\u6539\u90FD\u4F1A\u5148\u5C55\u793A\u7ED9\u7528\u6237\u5BA1\u6279\u540E\u624D\u751F\u6548\uFF0C\u56E0\u6B64\u53EF\u653E\u5FC3\u8F93\u51FA\uFF1B\u80FD\u4F7F\u7528 replace \u65F6\u4F18\u5148\u4F7F\u7528 replace\u3002",
+    files.length > 0 ? `\u5F53\u524D\u5E93\u5185\u7684 Markdown \u6587\u4EF6\u5217\u8868\uFF1A
+${files.join("\n")}` : "\u5F53\u524D\u5E93\u5185\u6682\u65E0 Markdown \u6587\u4EF6\u3002"
+  ].join("\n");
+}
+
 // src/chatView.ts
 var VIEW_TYPE_QODER_CHAT = "qoder-chat-view";
-var QoderChatView = class extends import_obsidian.ItemView {
+var QoderChatView = class extends import_obsidian2.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.state = "chat";
@@ -376,7 +459,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     const wrap = root.createDiv({ cls: "qoder-login-wrap" });
     const card = wrap.createDiv({ cls: "qoder-login-card" });
     const logo = card.createDiv({ cls: "qoder-logo" });
-    (0, import_obsidian.setIcon)(logo, "bot");
+    (0, import_obsidian2.setIcon)(logo, "bot");
     card.createEl("div", { cls: "qoder-logo-text", text: "Qoder" });
     card.createEl("h2", { cls: "qoder-login-title", text: "\u767B\u5F55 Qoder Clone" });
     card.createEl("p", {
@@ -422,7 +505,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       const result = await verifyApiKey(this.plugin.settings);
       loginBtn.disabled = false;
       if (result.ok) {
-        new import_obsidian.Notice("Qoder Clone \u767B\u5F55\u6210\u529F");
+        new import_obsidian2.Notice("Qoder Clone \u767B\u5F55\u6210\u529F");
         await this.plugin.saveAll();
         this.plugin.updateStatusBar();
         this.render();
@@ -444,7 +527,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       cls: "qoder-icon-btn",
       attr: { title: "\u8FD4\u56DE\u804A\u5929" }
     });
-    (0, import_obsidian.setIcon)(backBtn, "arrow-left");
+    (0, import_obsidian2.setIcon)(backBtn, "arrow-left");
     backBtn.addEventListener("click", () => {
       this.state = "chat";
       this.render();
@@ -455,7 +538,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       cls: "qoder-icon-btn",
       attr: { title: "\u65B0\u5BF9\u8BDD" }
     });
-    (0, import_obsidian.setIcon)(newBtn, "square-plus");
+    (0, import_obsidian2.setIcon)(newBtn, "square-plus");
     newBtn.addEventListener("click", () => {
       this.plugin.newSession();
       this.state = "chat";
@@ -491,7 +574,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
         cls: "qoder-icon-btn",
         attr: { title: "\u91CD\u547D\u540D" }
       });
-      (0, import_obsidian.setIcon)(editBtn, "pencil");
+      (0, import_obsidian2.setIcon)(editBtn, "pencil");
       editBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this.startRename(row, titleEl, s.id);
@@ -500,7 +583,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
         cls: "qoder-icon-btn",
         attr: { title: "\u5BFC\u51FA\u4E3A Markdown" }
       });
-      (0, import_obsidian.setIcon)(exportBtn, "download");
+      (0, import_obsidian2.setIcon)(exportBtn, "download");
       exportBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
         await this.exportSession(s.id);
@@ -509,7 +592,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
         cls: "qoder-icon-btn qoder-icon-btn-danger",
         attr: { title: "\u5220\u9664" }
       });
-      (0, import_obsidian.setIcon)(delBtn, "trash-2");
+      (0, import_obsidian2.setIcon)(delBtn, "trash-2");
       delBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (window.confirm(`\u5220\u9664\u4F1A\u8BDD\u300C${s.title}\u300D\uFF1F`)) {
@@ -556,7 +639,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       path = `Qoder Clone ${safe} ${n++}.md`;
     }
     const file = await this.app.vault.create(path, sessionToMarkdown(session));
-    new import_obsidian.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
+    new import_obsidian2.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
     const leaf = this.app.workspace.getLeaf(true);
     await leaf.openFile(file);
   }
@@ -564,14 +647,14 @@ var QoderChatView = class extends import_obsidian.ItemView {
   renderChat(root) {
     const header = root.createDiv({ cls: "qoder-header" });
     const title = header.createDiv({ cls: "qoder-header-title" });
-    (0, import_obsidian.setIcon)(title, "bot");
+    (0, import_obsidian2.setIcon)(title, "bot");
     title.createSpan({ text: "Qoder Clone" });
     header.createDiv({ cls: "qoder-toolbar-spacer" });
     const historyBtn = header.createEl("button", {
       cls: "qoder-icon-btn",
       attr: { title: "\u5386\u53F2\u4F1A\u8BDD" }
     });
-    (0, import_obsidian.setIcon)(historyBtn, "history");
+    (0, import_obsidian2.setIcon)(historyBtn, "history");
     historyBtn.addEventListener("click", () => {
       this.state = "history";
       this.render();
@@ -580,7 +663,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       cls: "qoder-icon-btn",
       attr: { title: "\u65B0\u5BF9\u8BDD" }
     });
-    (0, import_obsidian.setIcon)(newBtn, "square-plus");
+    (0, import_obsidian2.setIcon)(newBtn, "square-plus");
     newBtn.addEventListener("click", () => {
       this.plugin.newSession();
       this.attachedFiles = [];
@@ -590,7 +673,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       cls: "qoder-icon-btn",
       attr: { title: "\u9000\u51FA\u767B\u5F55" }
     });
-    (0, import_obsidian.setIcon)(logoutBtn, "log-out");
+    (0, import_obsidian2.setIcon)(logoutBtn, "log-out");
     logoutBtn.addEventListener("click", () => this.logout());
     this.messagesEl = root.createDiv({ cls: "qoder-chat-messages" });
     this.renderMessages();
@@ -627,6 +710,21 @@ var QoderChatView = class extends import_obsidian.ItemView {
       });
       badge.setAttribute("title", "\u63D0\u95EE\u65F6\u5C06\u9644\u5E26\u5F53\u524D\u7B14\u8BB0\u5185\u5BB9");
     }
+    const agentBtn = toolbar.createEl("button", {
+      cls: "qoder-mode-btn",
+      text: "\u26A1 Agent"
+    });
+    agentBtn.setAttribute("title", "Agent \u6A21\u5F0F\uFF1AAI \u53EF\u5EFA\u8BAE\u521B\u5EFA/\u4FEE\u6539\u5E93\u5185\u6587\u4EF6\uFF08\u9700\u4F60\u5BA1\u6279\uFF09");
+    const syncAgentBtn = () => agentBtn.toggleClass("qoder-mode-on", this.plugin.settings.agentMode);
+    syncAgentBtn();
+    agentBtn.addEventListener("click", () => {
+      this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
+      void this.plugin.saveAll();
+      syncAgentBtn();
+      new import_obsidian2.Notice(
+        this.plugin.settings.agentMode ? "Agent \u6A21\u5F0F\u5DF2\u5F00\u542F\uFF1AAI \u53EF\u63D0\u51FA\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE" : "Agent \u6A21\u5F0F\u5DF2\u5173\u95ED"
+      );
+    });
     toolbar.createDiv({ cls: "qoder-toolbar-spacer" });
     this.stopBtn = toolbar.createEl("button", {
       cls: "qoder-chat-stop",
@@ -635,7 +733,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     this.stopBtn.style.display = "none";
     this.stopBtn.addEventListener("click", () => this.stop());
     this.sendBtn = toolbar.createEl("button", { cls: "qoder-chat-send" });
-    (0, import_obsidian.setIcon)(this.sendBtn, "arrow-up");
+    (0, import_obsidian2.setIcon)(this.sendBtn, "arrow-up");
     this.sendBtn.setAttribute("aria-label", "\u53D1\u9001");
     this.sendBtn.addEventListener("click", () => void this.send());
     this.inputEl.addEventListener("keydown", (e) => this.onInputKeydown(e));
@@ -651,7 +749,10 @@ var QoderChatView = class extends import_obsidian.ItemView {
     }
     for (const msg of session.messages) {
       const el = this.appendMessageEl(msg);
-      if (msg.role === "assistant") this.addCodeActions(el);
+      if (msg.role === "assistant") {
+        this.addCodeActions(el);
+        this.renderEditCards(el, msg.content);
+      }
     }
     this.scrollToBottom();
   }
@@ -677,7 +778,10 @@ var QoderChatView = class extends import_obsidian.ItemView {
     if (msg.role === "user" || msg.role === "error") {
       el.setText(msg.content);
     } else {
-      import_obsidian.MarkdownRenderer.render(this.app, msg.content, el, "", this).then(() => this.addCodeActions(el)).catch(() => el.setText(msg.content));
+      import_obsidian2.MarkdownRenderer.render(this.app, msg.content, el, "", this).then(() => {
+        this.addCodeActions(el);
+        this.renderEditCards(el, msg.content);
+      }).catch(() => el.setText(msg.content));
     }
     return el;
   }
@@ -691,7 +795,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
       copyBtn.addEventListener("click", () => {
         var _a;
         const code = pre.querySelector("code");
-        void navigator.clipboard.writeText((_a = code == null ? void 0 : code.innerText) != null ? _a : "").then(() => new import_obsidian.Notice("\u5DF2\u590D\u5236\u4EE3\u7801"));
+        void navigator.clipboard.writeText((_a = code == null ? void 0 : code.innerText) != null ? _a : "").then(() => new import_obsidian2.Notice("\u5DF2\u590D\u5236\u4EE3\u7801"));
       });
       const insertBtn = bar.createEl("button", { text: "\u63D2\u5165\u7B14\u8BB0" });
       insertBtn.addEventListener("click", () => {
@@ -703,15 +807,95 @@ var QoderChatView = class extends import_obsidian.ItemView {
     });
   }
   insertIntoNote(text) {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian2.MarkdownView);
     const editor = view == null ? void 0 : view.editor;
     if (!editor) {
-      new import_obsidian.Notice("\u8BF7\u5148\u6253\u5F00\u4E00\u4E2A\u7B14\u8BB0");
+      new import_obsidian2.Notice("\u8BF7\u5148\u6253\u5F00\u4E00\u4E2A\u7B14\u8BB0");
       return;
     }
     const cursor = editor.getCursor();
     editor.replaceRange(text + "\n", cursor);
-    new import_obsidian.Notice("\u5DF2\u63D2\u5165\u5230\u5F53\u524D\u7B14\u8BB0");
+    new import_obsidian2.Notice("\u5DF2\u63D2\u5165\u5230\u5F53\u524D\u7B14\u8BB0");
+  }
+  // ============ 文件修改审批卡片（Agent 模式） ============
+  renderEditCards(container, text) {
+    var _a, _b, _c, _d;
+    const parsed = parseEditBlocks(text);
+    if (parsed.length === 0) return;
+    const wrap = container.createDiv({ cls: "qoder-edit-cards" });
+    wrap.createDiv({
+      cls: "qoder-edit-cards-title",
+      text: `\u{1F4DD} \u68C0\u6D4B\u5230 ${parsed.length} \u9879\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE\uFF0C\u786E\u8BA4\u540E\u751F\u6548`
+    });
+    for (const p of parsed) {
+      const card = wrap.createDiv({ cls: "qoder-edit-card" });
+      if (!p.edit) {
+        card.createDiv({
+          cls: "qoder-edit-path",
+          text: `\u26A0\uFE0F \u7F16\u8F91\u5757\u89E3\u6790\u5931\u8D25\uFF1A${(_a = p.error) != null ? _a : "\u672A\u77E5\u9519\u8BEF"}`
+        });
+        card.createEl("pre", { cls: "qoder-edit-raw", text: p.raw });
+        continue;
+      }
+      const edit = p.edit;
+      const head = card.createDiv({ cls: "qoder-edit-head" });
+      head.createSpan({
+        cls: `qoder-edit-action qoder-edit-action-${edit.action}`,
+        text: edit.action === "replace" ? "\u66FF\u6362" : edit.action === "create" ? "\u65B0\u5EFA" : "\u8986\u5199"
+      });
+      head.createSpan({ cls: "qoder-edit-path", text: edit.path });
+      const diffEl = card.createDiv({ cls: "qoder-edit-diff" });
+      const addDiffLine = (type, lineText) => {
+        const row = diffEl.createDiv({
+          cls: `qoder-diff-line qoder-diff-${type}`
+        });
+        row.createSpan({
+          cls: "qoder-diff-mark",
+          text: type === "add" ? "+" : type === "del" ? "\u2212" : " "
+        });
+        row.createSpan({ text: lineText || " " });
+      };
+      if (edit.action === "replace") {
+        for (const line of lineDiff((_b = edit.search) != null ? _b : "", (_c = edit.replace) != null ? _c : "")) {
+          addDiffLine(line.type, line.text);
+        }
+      } else {
+        const allLines = ((_d = edit.content) != null ? _d : "").split("\n");
+        for (const l of allLines.slice(0, 12)) addDiffLine("add", l);
+        if (allLines.length > 12) {
+          diffEl.createDiv({
+            cls: "qoder-diff-line",
+            text: `\u2026\uFF08\u5171 ${allLines.length} \u884C\uFF09`
+          });
+        }
+      }
+      const btnRow = card.createDiv({ cls: "qoder-edit-btns" });
+      const status = btnRow.createSpan({ cls: "qoder-edit-status" });
+      const reject = btnRow.createEl("button", { text: "\u62D2\u7EDD" });
+      const apply = btnRow.createEl("button", {
+        text: "\u5E94\u7528",
+        cls: "mod-cta"
+      });
+      reject.addEventListener("click", () => {
+        reject.disabled = true;
+        apply.disabled = true;
+        status.setText("\u5DF2\u62D2\u7EDD");
+      });
+      apply.addEventListener("click", () => {
+        void (async () => {
+          apply.disabled = true;
+          try {
+            const msg = await applyEdit(this.app, edit);
+            status.setText(`\u2705 ${msg}`);
+            reject.disabled = true;
+            new import_obsidian2.Notice(msg);
+          } catch (e) {
+            status.setText(`\u274C ${e.message}`);
+            apply.disabled = false;
+          }
+        })();
+      });
+    }
   }
   scrollToBottom() {
     this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
@@ -737,7 +921,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     void this.plugin.saveAll();
     this.plugin.updateStatusBar();
     this.render();
-    new import_obsidian.Notice("\u5DF2\u9000\u51FA\u767B\u5F55");
+    new import_obsidian2.Notice("\u5DF2\u9000\u51FA\u767B\u5F55");
   }
   async sendText(text) {
     this.inputEl.value = text;
@@ -875,7 +1059,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
     if (!text || this.abortController) return;
     const settings = this.plugin.settings;
     if (!settings.apiKey) {
-      new import_obsidian.Notice("\u8BF7\u5148\u767B\u5F55");
+      new import_obsidian2.Notice("\u8BF7\u5148\u767B\u5F55");
       return;
     }
     for (const path of this.attachedFiles) {
@@ -908,7 +1092,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
           acc += partial;
           assistantMsg.content = acc;
           assistantEl.empty();
-          import_obsidian.MarkdownRenderer.render(
+          import_obsidian2.MarkdownRenderer.render(
             this.app,
             acc,
             assistantEl,
@@ -922,7 +1106,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
           assistantMsg.content = message;
           assistantEl.className = "qoder-msg qoder-msg-system-err";
           assistantEl.setText(message);
-          new import_obsidian.Notice(message);
+          new import_obsidian2.Notice(message);
         }
       },
       () => {
@@ -933,6 +1117,7 @@ var QoderChatView = class extends import_obsidian.ItemView {
           assistantEl.setText("(\u65E0\u5185\u5BB9)");
         } else {
           this.addCodeActions(assistantEl);
+          this.renderEditCards(assistantEl, assistantMsg.content);
         }
         this.plugin.touchSession(session);
         void this.plugin.saveAll();
@@ -956,6 +1141,9 @@ ${rules}`
         });
       }
     }
+    if (settings.agentMode) {
+      out.push({ role: "system", content: agentToolPrompt(this.app) });
+    }
     if (settings.includeActiveNote) {
       const note = await this.getActiveNoteContext();
       if (note) {
@@ -968,7 +1156,7 @@ ${note.body}`
     }
     for (const path of attached) {
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (file instanceof import_obsidian.TFile) {
+      if (file instanceof import_obsidian2.TFile) {
         try {
           const content = await this.app.vault.read(file);
           out.push({
@@ -1003,7 +1191,7 @@ ${note.body}`
 };
 
 // src/main.ts
-var QoderChatPlugin = class extends import_obsidian2.Plugin {
+var QoderChatPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -1086,7 +1274,7 @@ var QoderChatPlugin = class extends import_obsidian2.Plugin {
         void this.saveAll();
         this.updateStatusBar();
         this.refreshView();
-        new import_obsidian2.Notice("\u5DF2\u9000\u51FA Qoder Clone \u767B\u5F55");
+        new import_obsidian3.Notice("\u5DF2\u9000\u51FA Qoder Clone \u767B\u5F55");
       }
     });
     this.addSettingTab(new QoderChatSettingTab(this.app, this));
@@ -1168,17 +1356,17 @@ var QoderChatPlugin = class extends import_obsidian2.Plugin {
   /** Inline Chat：选中文本 → 指令 → AI 改写 → Diff 预览 → 应用 */
   async inlineChat(editor, view) {
     if (!this.isLoggedIn()) {
-      new import_obsidian2.Notice("\u8BF7\u5148\u767B\u5F55 Qoder Clone");
+      new import_obsidian3.Notice("\u8BF7\u5148\u767B\u5F55 Qoder Clone");
       return;
     }
     const sel = editor.getSelection();
     if (!sel.trim()) {
-      new import_obsidian2.Notice("\u8BF7\u5148\u5728\u7F16\u8F91\u5668\u4E2D\u9009\u4E2D\u8981\u6539\u5199\u7684\u6587\u672C");
+      new import_obsidian3.Notice("\u8BF7\u5148\u5728\u7F16\u8F91\u5668\u4E2D\u9009\u4E2D\u8981\u6539\u5199\u7684\u6587\u672C");
       return;
     }
     const instruction = await new InstructionModal(this.app).openAndWait();
     if (instruction === null) return;
-    new import_obsidian2.Notice("Qoder Clone \u6B63\u5728\u6539\u5199\u2026");
+    new import_obsidian3.Notice("Qoder Clone \u6B63\u5728\u6539\u5199\u2026");
     let result;
     try {
       result = await this.complete([
@@ -1195,12 +1383,12 @@ ${sel}`
         }
       ]);
     } catch (e) {
-      new import_obsidian2.Notice(`\u6539\u5199\u5931\u8D25\uFF1A${e.message}`);
+      new import_obsidian3.Notice(`\u6539\u5199\u5931\u8D25\uFF1A${e.message}`);
       return;
     }
     result = stripFences(result.trim());
     if (!result) {
-      new import_obsidian2.Notice("\u6A21\u578B\u672A\u8FD4\u56DE\u6709\u6548\u5185\u5BB9");
+      new import_obsidian3.Notice("\u6A21\u578B\u672A\u8FD4\u56DE\u6709\u6548\u5185\u5BB9");
       return;
     }
     const from = editor.getCursor("from");
@@ -1208,9 +1396,9 @@ ${sel}`
     const accept = await new DiffModal(this.app, sel, result).openAndWait();
     if (accept) {
       editor.replaceRange(result, from, to);
-      new import_obsidian2.Notice("\u5DF2\u5E94\u7528\u6539\u5199");
+      new import_obsidian3.Notice("\u5DF2\u5E94\u7528\u6539\u5199");
     } else {
-      new import_obsidian2.Notice("\u5DF2\u53D6\u6D88");
+      new import_obsidian3.Notice("\u5DF2\u53D6\u6D88");
     }
   }
 };
@@ -1218,7 +1406,7 @@ function stripFences(text) {
   const m = text.match(/^```[\w-]*\r?\n([\s\S]*?)\r?\n```$/);
   return m ? m[1] : text;
 }
-var InstructionModal = class extends import_obsidian2.Modal {
+var InstructionModal = class extends import_obsidian3.Modal {
   constructor() {
     super(...arguments);
     this.resolveFn = null;
@@ -1275,7 +1463,7 @@ var InstructionModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
-var DiffModal = class extends import_obsidian2.Modal {
+var DiffModal = class extends import_obsidian3.Modal {
   constructor(app, oldText, newText) {
     super(app);
     this.resolveFn = null;
@@ -1321,7 +1509,7 @@ var DiffModal = class extends import_obsidian2.Modal {
     this.contentEl.empty();
   }
 };
-var QoderChatSettingTab = class extends import_obsidian2.PluginSettingTab {
+var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1330,10 +1518,10 @@ var QoderChatSettingTab = class extends import_obsidian2.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Qoder Clone \u8BBE\u7F6E" });
-    new import_obsidian2.Setting(containerEl).setName("\u767B\u5F55\u72B6\u6001").setDesc(
+    new import_obsidian3.Setting(containerEl).setName("\u767B\u5F55\u72B6\u6001").setDesc(
       this.plugin.isLoggedIn() ? `\u5DF2\u767B\u5F55\uFF08\u6A21\u578B\uFF1A${this.plugin.settings.model}\uFF09` : "\u672A\u767B\u5F55\uFF0C\u8BF7\u5728\u804A\u5929\u9762\u677F\u767B\u5F55\u9875\u8F93\u5165\u51ED\u8BC1"
     );
-    new import_obsidian2.Setting(containerEl).setName("\u670D\u52A1\u5546\u9884\u8BBE").setDesc("\u9009\u62E9\u540E\u81EA\u52A8\u586B\u5145\u5BF9\u5E94\u7684 Base URL \u4E0E\u9ED8\u8BA4\u6A21\u578B").addDropdown(
+    new import_obsidian3.Setting(containerEl).setName("\u670D\u52A1\u5546\u9884\u8BBE").setDesc("\u9009\u62E9\u540E\u81EA\u52A8\u586B\u5145\u5BF9\u5E94\u7684 Base URL \u4E0E\u9ED8\u8BA4\u6A21\u578B").addDropdown(
       (dropdown) => dropdown.addOptions({
         dashscope: PROVIDER_PRESETS.dashscope.label,
         openai: PROVIDER_PRESETS.openai.label
@@ -1346,26 +1534,26 @@ var QoderChatSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.display();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Base URL").setDesc("OpenAI \u517C\u5BB9\u63A5\u53E3\u5730\u5740").addText(
+    new import_obsidian3.Setting(containerEl).setName("Base URL").setDesc("OpenAI \u517C\u5BB9\u63A5\u53E3\u5730\u5740").addText(
       (text) => text.setPlaceholder("https://.../v1").setValue(this.plugin.settings.baseUrl).onChange(async (value) => {
         this.plugin.settings.baseUrl = value.trim();
         await this.plugin.saveAll();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("API Key").setDesc("BYOK\uFF1A\u4F60\u81EA\u5DF1\u7684\u5BC6\u94A5\uFF0C\u4EC5\u4FDD\u5B58\u5728\u672C\u5730").addText((text) => {
+    new import_obsidian3.Setting(containerEl).setName("API Key").setDesc("BYOK\uFF1A\u4F60\u81EA\u5DF1\u7684\u5BC6\u94A5\uFF0C\u4EC5\u4FDD\u5B58\u5728\u672C\u5730").addText((text) => {
       text.inputEl.type = "password";
       text.setPlaceholder("sk-...").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value.trim();
         await this.plugin.saveAll();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("\u6A21\u578B").setDesc("\u4F8B\u5982 qwen3.7-plus / gpt-4o-mini").addText(
+    new import_obsidian3.Setting(containerEl).setName("\u6A21\u578B").setDesc("\u4F8B\u5982 qwen3.7-plus / gpt-4o-mini").addText(
       (text) => text.setPlaceholder("\u6A21\u578B\u540D\u79F0").setValue(this.plugin.settings.model).onChange(async (value) => {
         this.plugin.settings.model = value.trim();
         await this.plugin.saveAll();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("\u7CFB\u7EDF\u63D0\u793A\u8BCD").setDesc("\u5B9A\u4E49\u52A9\u624B\u7684\u89D2\u8272\u4E0E\u56DE\u7B54\u98CE\u683C").addTextArea((text) => {
+    new import_obsidian3.Setting(containerEl).setName("\u7CFB\u7EDF\u63D0\u793A\u8BCD").setDesc("\u5B9A\u4E49\u52A9\u624B\u7684\u89D2\u8272\u4E0E\u56DE\u7B54\u98CE\u683C").addTextArea((text) => {
       text.inputEl.rows = 4;
       text.inputEl.cols = 40;
       text.setValue(this.plugin.settings.systemPrompt).onChange(async (value) => {
@@ -1373,31 +1561,31 @@ var QoderChatSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveAll();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("\u542F\u7528 Rules \u89C4\u5219\u6587\u4EF6").setDesc(`\u8BFB\u53D6\u5E93\u6839\u76EE\u5F55 .qoder-rules/*.md \u4E2D\u7684\u89C4\u5219\uFF0C\u81EA\u52A8\u6CE8\u5165\u5BF9\u8BDD\uFF08\u53C2\u7167 Continue \u7684 rules \u673A\u5236\uFF09`).addToggle(
+    new import_obsidian3.Setting(containerEl).setName("\u542F\u7528 Rules \u89C4\u5219\u6587\u4EF6").setDesc(`\u8BFB\u53D6\u5E93\u6839\u76EE\u5F55 .qoder-rules/*.md \u4E2D\u7684\u89C4\u5219\uFF0C\u81EA\u52A8\u6CE8\u5165\u5BF9\u8BDD\uFF08\u53C2\u7167 Continue \u7684 rules \u673A\u5236\uFF09`).addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.rulesEnabled).onChange(async (value) => {
         this.plugin.settings.rulesEnabled = value;
         await this.plugin.saveAll();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("\u6D41\u5F0F\u8F93\u51FA").setDesc("\u9010\u5B57\u8F93\u51FA\u56DE\u590D\uFF08\u63A8\u8350\u5F00\u542F\uFF09").addToggle(
+    new import_obsidian3.Setting(containerEl).setName("\u6D41\u5F0F\u8F93\u51FA").setDesc("\u9010\u5B57\u8F93\u51FA\u56DE\u590D\uFF08\u63A8\u8350\u5F00\u542F\uFF09").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.stream).onChange(async (value) => {
         this.plugin.settings.stream = value;
         await this.plugin.saveAll();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("\u643A\u5E26\u5F53\u524D\u7B14\u8BB0\u4E0A\u4E0B\u6587").setDesc("\u63D0\u95EE\u65F6\u81EA\u52A8\u9644\u5E26\u5F53\u524D\u6253\u5F00\u7B14\u8BB0\u7684\u5185\u5BB9").addToggle(
+    new import_obsidian3.Setting(containerEl).setName("\u643A\u5E26\u5F53\u524D\u7B14\u8BB0\u4E0A\u4E0B\u6587").setDesc("\u63D0\u95EE\u65F6\u81EA\u52A8\u9644\u5E26\u5F53\u524D\u6253\u5F00\u7B14\u8BB0\u7684\u5185\u5BB9").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.includeActiveNote).onChange(async (value) => {
         this.plugin.settings.includeActiveNote = value;
         await this.plugin.saveAll();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("Temperature").setDesc("\u751F\u6210\u968F\u673A\u6027\uFF080 - 2\uFF09").addSlider(
+    new import_obsidian3.Setting(containerEl).setName("Temperature").setDesc("\u751F\u6210\u968F\u673A\u6027\uFF080 - 2\uFF09").addSlider(
       (slider) => slider.setLimits(0, 2, 0.1).setValue(this.plugin.settings.temperature).setDynamicTooltip().onChange(async (value) => {
         this.plugin.settings.temperature = value;
         await this.plugin.saveAll();
       })
     );
-    new import_obsidian2.Setting(containerEl).setName("\u7B14\u8BB0\u4E0A\u4E0B\u6587\u6700\u5927\u5B57\u7B26\u6570").setDesc("\u8D85\u51FA\u90E8\u5206\u5C06\u88AB\u622A\u65AD").addText(
+    new import_obsidian3.Setting(containerEl).setName("\u7B14\u8BB0\u4E0A\u4E0B\u6587\u6700\u5927\u5B57\u7B26\u6570").setDesc("\u8D85\u51FA\u90E8\u5206\u5C06\u88AB\u622A\u65AD").addText(
       (text) => text.setPlaceholder("8000").setValue(String(this.plugin.settings.maxNoteChars)).onChange(async (value) => {
         const n = parseInt(value, 10);
         if (!isNaN(n) && n > 0) {

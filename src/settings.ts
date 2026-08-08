@@ -20,6 +20,7 @@ export interface QoderChatSettings {
 	includeActiveNote: boolean;
 	maxNoteChars: number;
 	rulesEnabled: boolean;
+	agentMode: boolean;
 }
 
 export const PROVIDER_PRESETS: Record<
@@ -74,4 +75,5 @@ export const DEFAULT_SETTINGS: QoderChatSettings = {
 	includeActiveNote: true,
 	maxNoteChars: 8000,
 	rulesEnabled: true,
+	agentMode: false,
 };
