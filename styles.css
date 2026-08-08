@@ -1,0 +1,620 @@
+/* ============ Qoder Chat —— 仿 Qoder 风格界面 ============ */
+
+.qoder-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 0;
+}
+
+/* ---------- 登录页 ---------- */
+
+.qoder-login-wrap {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	overflow-y: auto;
+}
+
+.qoder-login-card {
+	width: 100%;
+	max-width: 340px;
+	padding: 32px 28px;
+	border-radius: 14px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+}
+
+.qoder-logo {
+	width: 52px;
+	height: 52px;
+	border-radius: 14px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.qoder-logo svg {
+	width: 30px;
+	height: 30px;
+}
+
+.qoder-logo-text {
+	font-size: 1.3em;
+	font-weight: 700;
+	letter-spacing: 1px;
+}
+
+.qoder-login-title {
+	margin: 4px 0 0;
+	font-size: 1.1em;
+}
+
+.qoder-login-desc {
+	margin: 0;
+	font-size: 0.82em;
+	color: var(--text-muted);
+	text-align: center;
+	line-height: 1.6;
+}
+
+.qoder-login-input {
+	width: 100%;
+	border-radius: 8px;
+}
+
+.qoder-login-adv {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.qoder-login-adv label {
+	font-size: 0.78em;
+	color: var(--text-muted);
+}
+
+.qoder-login-status {
+	min-height: 1.4em;
+	font-size: 0.82em;
+	color: var(--text-error);
+	text-align: center;
+}
+
+.qoder-login-btn {
+	width: 100%;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	border-radius: 8px;
+	padding: 9px 0;
+	font-size: 0.95em;
+	cursor: pointer;
+}
+
+.qoder-login-btn:disabled {
+	opacity: 0.6;
+	cursor: wait;
+}
+
+.qoder-login-link {
+	font-size: 0.8em;
+	color: var(--link-color);
+	cursor: pointer;
+	text-decoration: none;
+}
+
+.qoder-login-link:hover {
+	text-decoration: underline;
+}
+
+/* ---------- 顶栏 ---------- */
+
+.qoder-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.qoder-header-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	font-size: 0.9em;
+	flex: 1;
+}
+
+.qoder-header-title svg {
+	width: 16px;
+	height: 16px;
+	color: var(--interactive-accent);
+}
+
+.qoder-icon-btn {
+	background: transparent;
+	border: none;
+	border-radius: 6px;
+	padding: 4px;
+	cursor: pointer;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+}
+
+.qoder-icon-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.qoder-icon-btn svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* ---------- 消息区 ---------- */
+
+.qoder-chat-messages {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.qoder-msg {
+	max-width: 92%;
+	padding: 9px 13px;
+	border-radius: 12px;
+	font-size: 0.93em;
+	line-height: 1.6;
+	word-break: break-word;
+}
+
+.qoder-msg p:first-child { margin-top: 0; }
+.qoder-msg p:last-child { margin-bottom: 0; }
+
+.qoder-msg-user {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	align-self: flex-end;
+	border-bottom-right-radius: 3px;
+}
+
+.qoder-msg-assistant {
+	background: var(--background-secondary);
+	align-self: flex-start;
+	border-bottom-left-radius: 3px;
+}
+
+.qoder-msg-system-err {
+	background: rgba(var(--color-red-rgb), 0.12);
+	color: var(--text-error);
+	align-self: stretch;
+	font-size: 0.85em;
+}
+
+.qoder-msg pre {
+	overflow-x: auto;
+}
+
+.qoder-thinking {
+	opacity: 0.6;
+	font-style: italic;
+}
+
+/* ---------- 欢迎页 ---------- */
+
+.qoder-welcome {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	margin-top: 36px;
+	padding: 0 8px;
+}
+
+.qoder-welcome-hi {
+	font-size: 1.5em;
+	font-weight: 700;
+}
+
+.qoder-welcome-sub {
+	color: var(--text-muted);
+	font-size: 0.88em;
+	text-align: center;
+	line-height: 1.6;
+}
+
+.qoder-suggestions {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+	width: 100%;
+	max-width: 360px;
+	margin-top: 16px;
+}
+
+.qoder-suggestion-btn {
+	padding: 12px 10px;
+	border-radius: 10px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	cursor: pointer;
+	font-size: 0.88em;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.qoder-suggestion-btn:hover {
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
+}
+
+/* ---------- 输入盒 ---------- */
+
+.qoder-input-box {
+	margin: 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 12px;
+	background: var(--background-secondary);
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.qoder-input-box:focus-within {
+	border-color: var(--interactive-accent);
+}
+
+.qoder-chat-input {
+	width: 100%;
+	resize: none;
+	min-height: 36px;
+	max-height: 160px;
+	border: none;
+	background: transparent;
+	box-shadow: none;
+	padding: 2px 4px;
+}
+
+.qoder-chat-input:focus {
+	box-shadow: none;
+	border: none;
+}
+
+.qoder-input-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.qoder-model-select {
+	font-size: 0.8em;
+	padding: 3px 6px;
+	border-radius: 6px;
+	max-width: 140px;
+}
+
+.qoder-ctx-badge {
+	font-size: 0.75em;
+	color: var(--text-muted);
+	background: var(--background-modifier-hover);
+	border-radius: 6px;
+	padding: 3px 7px;
+	white-space: nowrap;
+}
+
+.qoder-toolbar-spacer {
+	flex: 1;
+}
+
+.qoder-chat-send {
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+	border: none;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.qoder-chat-send svg {
+	width: 16px;
+	height: 16px;
+}
+
+.qoder-chat-send:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.qoder-chat-stop {
+	border: none;
+	border-radius: 8px;
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+	padding: 4px 12px;
+	font-size: 0.85em;
+	cursor: pointer;
+}
+
+/* ---------- 设置页 ---------- */
+
+.qoder-settings-notice {
+	color: var(--text-muted);
+	font-size: 0.85em;
+	line-height: 1.6;
+}
+
+/* ---------- 历史会话列表（参照 Continue History） ---------- */
+
+.qoder-history-list {
+	flex: 1;
+	overflow-y: auto;
+	padding: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.qoder-history-row {
+	position: relative;
+	padding: 10px 12px;
+	border-radius: 10px;
+	border: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+	transition: background 0.12s ease;
+}
+
+.qoder-history-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.qoder-history-row-active {
+	border-color: var(--interactive-accent);
+}
+
+.qoder-history-title-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.qoder-history-title {
+	flex: 1;
+	font-size: 0.88em;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.qoder-history-count {
+	font-size: 0.72em;
+	background: var(--background-secondary);
+	border-radius: 999px;
+	padding: 2px 8px;
+	color: var(--text-muted);
+}
+
+.qoder-history-date {
+	font-size: 0.75em;
+	color: var(--text-muted);
+	margin-top: 3px;
+}
+
+.qoder-history-actions {
+	position: absolute;
+	right: 8px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: none;
+	gap: 2px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+	padding: 2px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.qoder-history-row:hover .qoder-history-actions {
+	display: flex;
+}
+
+.qoder-icon-btn-danger:hover {
+	color: var(--text-error);
+}
+
+.qoder-history-rename {
+	width: 100%;
+	font-size: 0.85em;
+	padding: 2px 6px;
+}
+
+/* ---------- @ 引用弹窗 ---------- */
+
+.qoder-at-popup {
+	position: absolute;
+	left: 10px;
+	right: 10px;
+	bottom: 120px;
+	max-height: 200px;
+	overflow-y: auto;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+	z-index: 10;
+}
+
+.qoder-at-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 12px;
+	cursor: pointer;
+	font-size: 0.85em;
+}
+
+.qoder-at-item.qoder-at-active,
+.qoder-at-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.qoder-at-name {
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.qoder-at-path {
+	color: var(--text-muted);
+	font-size: 0.85em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.qoder-at-empty {
+	color: var(--text-muted);
+	cursor: default;
+}
+
+/* ---------- 附加文件 chips ---------- */
+
+.qoder-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 0 10px;
+}
+
+.qoder-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 0.78em;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	padding: 3px 9px;
+}
+
+.qoder-chip-x {
+	cursor: pointer;
+	color: var(--text-muted);
+	font-weight: 700;
+}
+
+.qoder-chip-x:hover {
+	color: var(--text-error);
+}
+
+/* ---------- 代码块操作按钮 ---------- */
+
+.qoder-msg pre {
+	position: relative;
+}
+
+.qoder-code-actions {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	display: flex;
+	gap: 4px;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+}
+
+.qoder-msg pre:hover .qoder-code-actions {
+	opacity: 1;
+}
+
+.qoder-code-actions button {
+	font-size: 0.72em;
+	padding: 2px 8px;
+	border-radius: 6px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	cursor: pointer;
+}
+
+.qoder-code-actions button:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* ---------- 弹窗（Inline Chat / Diff） ---------- */
+
+.qoder-modal {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.qoder-modal h3 {
+	margin: 0;
+}
+
+.qoder-modal-input {
+	width: 100%;
+	resize: vertical;
+	min-height: 60px;
+}
+
+.qoder-modal-row {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.qoder-diff {
+	max-height: 50vh;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	font-family: var(--font-monospace);
+	font-size: 0.82em;
+	padding: 6px 0;
+}
+
+.qoder-diff-line {
+	display: flex;
+	gap: 8px;
+	padding: 1px 10px;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.qoder-diff-mark {
+	width: 1em;
+	flex: 0 0 auto;
+	text-align: center;
+	opacity: 0.7;
+}
+
+.qoder-diff-add {
+	background: rgba(var(--color-green-rgb), 0.15);
+}
+
+.qoder-diff-del {
+	background: rgba(var(--color-red-rgb), 0.15);
+}
+
+.qoder-diff-del span:last-child {
+	text-decoration: line-through;
+	opacity: 0.75;
+}

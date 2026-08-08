@@ -1,0 +1,809 @@
+// Qoder Chat —— 侧边栏视图（登录 / 历史会话 / 聊天）
+// 界面与交互参照 Continue（Apache 2.0）独立实现
+
+import {
+	ItemView,
+	MarkdownRenderer,
+	MarkdownView,
+	Notice,
+	setIcon,
+	TFile,
+	WorkspaceLeaf,
+} from "obsidian";
+import type QoderChatPlugin from "./main";
+import { ChatMessage } from "./sessions";
+import {
+	formatDate,
+	sessionToMarkdown,
+} from "./sessions";
+import { PROVIDER_MODELS, SUGGESTIONS } from "./settings";
+import { chatCompletion, verifyApiKey, LlmRequestMessage } from "./llm";
+import { loadRules } from "./rules";
+
+export const VIEW_TYPE_QODER_CHAT = "qoder-chat-view";
+
+type PanelState = "chat" | "history";
+
+export class QoderChatView extends ItemView {
+	plugin: QoderChatPlugin;
+	private state: PanelState = "chat";
+	private messagesEl!: HTMLElement;
+	private inputEl!: HTMLTextAreaElement;
+	private sendBtn!: HTMLButtonElement;
+	private stopBtn!: HTMLButtonElement;
+	private chipsEl!: HTMLElement;
+	private popupEl: HTMLElement | null = null;
+	private popupItems: TFile[] = [];
+	private popupIndex = 0;
+	private attachedFiles: string[] = [];
+	private abortController: AbortController | null = null;
+	private generating = false;
+
+	constructor(leaf: WorkspaceLeaf, plugin: QoderChatPlugin) {
+		super(leaf);
+		this.plugin = plugin;
+	}
+
+	getViewType(): string {
+		return VIEW_TYPE_QODER_CHAT;
+	}
+
+	getDisplayText(): string {
+		return "Qoder Chat";
+	}
+
+	getIcon(): string {
+		return "bot";
+	}
+
+	async onOpen(): Promise<void> {
+		this.render();
+	}
+
+	async onClose(): Promise<void> {
+		this.stop();
+	}
+
+	refresh(): void {
+		this.render();
+	}
+
+	private render(): void {
+		const root = this.containerEl.children[1] as HTMLElement;
+		root.empty();
+		root.addClass("qoder-view");
+		if (!this.plugin.isLoggedIn()) {
+			this.renderLogin(root);
+			return;
+		}
+		if (this.state === "history") {
+			this.renderHistory(root);
+		} else {
+			this.renderChat(root);
+		}
+	}
+
+	// ============ 登录页 ============
+
+	private renderLogin(root: HTMLElement): void {
+		const wrap = root.createDiv({ cls: "qoder-login-wrap" });
+		const card = wrap.createDiv({ cls: "qoder-login-card" });
+
+		const logo = card.createDiv({ cls: "qoder-logo" });
+		setIcon(logo, "bot");
+		card.createEl("div", { cls: "qoder-logo-text", text: "Qoder" });
+		card.createEl("h2", { cls: "qoder-login-title", text: "登录 Qoder Chat" });
+		card.createEl("p", {
+			cls: "qoder-login-desc",
+			text: "使用阿里云百炼（DashScope）凭证登录，密钥仅保存在本机 Obsidian 配置中。",
+		});
+
+		const keyInput = card.createEl("input", {
+			cls: "qoder-login-input",
+			type: "password",
+			attr: { placeholder: "输入阿里云百炼 API Key（sk-...）" },
+		});
+
+		const adv = card.createDiv({ cls: "qoder-login-adv" });
+		adv.createEl("label", { text: "Base URL" });
+		const urlInput = adv.createEl("input", {
+			cls: "qoder-login-input",
+			type: "text",
+			value: this.plugin.settings.baseUrl,
+		});
+
+		const statusEl = card.createDiv({ cls: "qoder-login-status" });
+
+		const loginBtn = card.createEl("button", {
+			cls: "qoder-login-btn",
+			text: "登 录",
+		});
+
+		const link = card.createEl("a", {
+			cls: "qoder-login-link",
+			text: "前往阿里云百炼获取 API Key →",
+		});
+		link.addEventListener("click", (e) => {
+			e.preventDefault();
+			void window.open("https://bailian.console.aliyun.com/", "_blank");
+		});
+
+		const doLogin = async () => {
+			const key = keyInput.value.trim();
+			if (!key) {
+				statusEl.setText("请输入 API Key");
+				return;
+			}
+			loginBtn.disabled = true;
+			statusEl.setText("正在验证凭证…");
+			this.plugin.settings.apiKey = key;
+			const url = urlInput.value.trim();
+			if (url) this.plugin.settings.baseUrl = url;
+			const result = await verifyApiKey(this.plugin.settings);
+			loginBtn.disabled = false;
+			if (result.ok) {
+				new Notice("Qoder Chat 登录成功");
+				await this.plugin.saveAll();
+				this.plugin.updateStatusBar();
+				this.render();
+			} else {
+				this.plugin.settings.apiKey = "";
+				statusEl.setText(result.message);
+			}
+		};
+
+		loginBtn.addEventListener("click", () => void doLogin());
+		keyInput.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") void doLogin();
+		});
+		keyInput.focus();
+	}
+
+	// ============ 历史会话列表（参照 Continue History 页） ============
+
+	private renderHistory(root: HTMLElement): void {
+		const header = root.createDiv({ cls: "qoder-header" });
+		const backBtn = header.createEl("button", {
+			cls: "qoder-icon-btn",
+			attr: { title: "返回聊天" },
+		});
+		setIcon(backBtn, "arrow-left");
+		backBtn.addEventListener("click", () => {
+			this.state = "chat";
+			this.render();
+		});
+		header.createDiv({ cls: "qoder-header-title", text: "历史会话" });
+		header.createDiv({ cls: "qoder-toolbar-spacer" });
+
+		const newBtn = header.createEl("button", {
+			cls: "qoder-icon-btn",
+			attr: { title: "新对话" },
+		});
+		setIcon(newBtn, "square-plus");
+		newBtn.addEventListener("click", () => {
+			this.plugin.newSession();
+			this.state = "chat";
+			this.render();
+		});
+
+		const list = root.createDiv({ cls: "qoder-history-list" });
+		const sessions = [...this.plugin.sessions].sort(
+			(a, b) => b.updatedAt - a.updatedAt
+		);
+		if (sessions.length === 0) {
+			list.createDiv({ cls: "qoder-chat-empty", text: "暂无会话" });
+			return;
+		}
+
+		for (const s of sessions) {
+			const row = list.createDiv({ cls: "qoder-history-row" });
+			if (s.id === this.plugin.currentSessionId) {
+				row.addClass("qoder-history-row-active");
+			}
+
+			const body = row.createDiv({ cls: "qoder-history-body" });
+			const titleRow = body.createDiv({ cls: "qoder-history-title-row" });
+			const titleEl = titleRow.createSpan({
+				cls: "qoder-history-title",
+				text: s.title,
+			});
+			const count = s.messages.filter((m) => m.role !== "error").length;
+			titleRow.createSpan({ cls: "qoder-history-count", text: String(count) });
+			body.createDiv({
+				cls: "qoder-history-date",
+				text: formatDate(s.updatedAt),
+			});
+
+			// hover 操作按钮：重命名 / 导出 Markdown / 删除
+			const actions = row.createDiv({ cls: "qoder-history-actions" });
+			const editBtn = actions.createEl("button", {
+				cls: "qoder-icon-btn",
+				attr: { title: "重命名" },
+			});
+			setIcon(editBtn, "pencil");
+			editBtn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this.startRename(row, titleEl, s.id);
+			});
+
+			const exportBtn = actions.createEl("button", {
+				cls: "qoder-icon-btn",
+				attr: { title: "导出为 Markdown" },
+			});
+			setIcon(exportBtn, "download");
+			exportBtn.addEventListener("click", async (e) => {
+				e.stopPropagation();
+				await this.exportSession(s.id);
+			});
+
+			const delBtn = actions.createEl("button", {
+				cls: "qoder-icon-btn qoder-icon-btn-danger",
+				attr: { title: "删除" },
+			});
+			setIcon(delBtn, "trash-2");
+			delBtn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				if (window.confirm(`删除会话「${s.title}」？`)) {
+					this.plugin.deleteSession(s.id);
+					this.render();
+				}
+			});
+
+			row.addEventListener("click", () => {
+				this.plugin.switchSession(s.id);
+				this.state = "chat";
+				this.render();
+			});
+		}
+	}
+
+	private startRename(row: HTMLElement, titleEl: HTMLElement, id: string): void {
+		const session = this.plugin.sessions.find((x) => x.id === id);
+		if (!session) return;
+		const input = document.createElement("input");
+		input.type = "text";
+		input.value = session.title;
+		input.addClass("qoder-history-rename");
+		titleEl.replaceWith(input);
+		input.focus();
+		input.select();
+		const commit = async () => {
+			const v = input.value.trim();
+			if (v) session.title = v;
+			await this.plugin.saveAll();
+			this.render();
+		};
+		input.addEventListener("keydown", (e) => {
+			if (e.key === "Enter") void commit();
+			else if (e.key === "Escape") this.render();
+		});
+		input.addEventListener("blur", () => void commit());
+		void row;
+	}
+
+	private async exportSession(id: string): Promise<void> {
+		const session = this.plugin.sessions.find((x) => x.id === id);
+		if (!session) return;
+		const safe = session.title.replace(/[\\/:*?"<>|#^\[\]]/g, "").slice(0, 40);
+		let path = `Qoder Chat ${safe}.md`;
+		let n = 1;
+		while (this.app.vault.getAbstractFileByPath(path)) {
+			path = `Qoder Chat ${safe} ${n++}.md`;
+		}
+		const file = await this.app.vault.create(path, sessionToMarkdown(session));
+		new Notice(`已导出：${path}`);
+		const leaf = this.app.workspace.getLeaf(true);
+		await leaf.openFile(file);
+	}
+
+	// ============ 聊天页 ============
+
+	private renderChat(root: HTMLElement): void {
+		const header = root.createDiv({ cls: "qoder-header" });
+		const title = header.createDiv({ cls: "qoder-header-title" });
+		setIcon(title, "bot");
+		title.createSpan({ text: "Qoder Chat" });
+		header.createDiv({ cls: "qoder-toolbar-spacer" });
+
+		const historyBtn = header.createEl("button", {
+			cls: "qoder-icon-btn",
+			attr: { title: "历史会话" },
+		});
+		setIcon(historyBtn, "history");
+		historyBtn.addEventListener("click", () => {
+			this.state = "history";
+			this.render();
+		});
+
+		const newBtn = header.createEl("button", {
+			cls: "qoder-icon-btn",
+			attr: { title: "新对话" },
+		});
+		setIcon(newBtn, "square-plus");
+		newBtn.addEventListener("click", () => {
+			this.plugin.newSession();
+			this.attachedFiles = [];
+			this.render();
+		});
+
+		const logoutBtn = header.createEl("button", {
+			cls: "qoder-icon-btn",
+			attr: { title: "退出登录" },
+		});
+		setIcon(logoutBtn, "log-out");
+		logoutBtn.addEventListener("click", () => this.logout());
+
+		// 消息区
+		this.messagesEl = root.createDiv({ cls: "qoder-chat-messages" });
+		this.renderMessages();
+
+		// 附加文件 chips
+		this.chipsEl = root.createDiv({ cls: "qoder-chips" });
+		this.renderChips();
+
+		// 输入盒
+		const inputBox = root.createDiv({ cls: "qoder-input-box" });
+		this.inputEl = inputBox.createEl("textarea", {
+			cls: "qoder-chat-input",
+			attr: {
+				placeholder: "提问…（@ 引用笔记，Enter 发送）",
+				rows: "2",
+			},
+		});
+
+		const toolbar = inputBox.createDiv({ cls: "qoder-input-toolbar" });
+		const modelSelect = toolbar.createEl("select", {
+			cls: "qoder-model-select",
+		});
+		const models = PROVIDER_MODELS[this.plugin.settings.provider];
+		const current = this.plugin.settings.model;
+		const options = models.includes(current) ? models : [current, ...models];
+		for (const m of options) {
+			const opt = modelSelect.createEl("option", { value: m, text: m });
+			if (m === current) opt.selected = true;
+		}
+		modelSelect.addEventListener("change", () => {
+			this.plugin.settings.model = modelSelect.value;
+			void this.plugin.saveAll();
+			this.plugin.updateStatusBar();
+		});
+
+		if (this.plugin.settings.includeActiveNote) {
+			const badge = toolbar.createDiv({
+				cls: "qoder-ctx-badge",
+				text: "📄 当前笔记",
+			});
+			badge.setAttribute("title", "提问时将附带当前笔记内容");
+		}
+
+		toolbar.createDiv({ cls: "qoder-toolbar-spacer" });
+
+		this.stopBtn = toolbar.createEl("button", {
+			cls: "qoder-chat-stop",
+			text: "停止",
+		});
+		this.stopBtn.style.display = "none";
+		this.stopBtn.addEventListener("click", () => this.stop());
+
+		this.sendBtn = toolbar.createEl("button", { cls: "qoder-chat-send" });
+		setIcon(this.sendBtn, "arrow-up");
+		this.sendBtn.setAttribute("aria-label", "发送");
+		this.sendBtn.addEventListener("click", () => void this.send());
+
+		this.inputEl.addEventListener("keydown", (e) => this.onInputKeydown(e));
+		this.inputEl.addEventListener("input", () => this.onInput());
+
+		if (this.generating) this.setBusy(true);
+	}
+
+	private renderMessages(): void {
+		this.messagesEl.empty();
+		const session = this.plugin.currentSession();
+		if (session.messages.length === 0) {
+			this.renderWelcome();
+			return;
+		}
+		for (const msg of session.messages) {
+			const el = this.appendMessageEl(msg);
+			if (msg.role === "assistant") this.addCodeActions(el);
+		}
+		this.scrollToBottom();
+	}
+
+	private renderWelcome(): void {
+		const w = this.messagesEl.createDiv({ cls: "qoder-welcome" });
+		w.createDiv({ cls: "qoder-welcome-hi", text: "你好 👋" });
+		w.createDiv({
+			cls: "qoder-welcome-sub",
+			text: "我是 Qoder Chat，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
+		});
+		const grid = w.createDiv({ cls: "qoder-suggestions" });
+		for (const s of SUGGESTIONS) {
+			const btn = grid.createEl("button", {
+				cls: "qoder-suggestion-btn",
+				text: s.title,
+			});
+			btn.addEventListener("click", () => void this.sendText(s.prompt));
+		}
+	}
+
+	private appendMessageEl(msg: ChatMessage): HTMLElement {
+		const cls =
+			msg.role === "user"
+				? "qoder-msg qoder-msg-user"
+				: msg.role === "error"
+				? "qoder-msg qoder-msg-system-err"
+				: "qoder-msg qoder-msg-assistant";
+		const el = this.messagesEl.createDiv({ cls });
+		if (msg.role === "user" || msg.role === "error") {
+			el.setText(msg.content);
+		} else {
+			MarkdownRenderer.render(this.app, msg.content, el, "", this)
+				.then(() => this.addCodeActions(el))
+				.catch(() => el.setText(msg.content));
+		}
+		return el;
+	}
+
+	/** 为代码块添加 复制 / 插入笔记 按钮（参照 Continue 代码块操作） */
+	private addCodeActions(el: HTMLElement): void {
+		el.querySelectorAll("pre").forEach((pre) => {
+			if (pre.querySelector(".qoder-code-actions")) return;
+			const bar = document.createElement("div");
+			bar.addClass("qoder-code-actions");
+			const copyBtn = bar.createEl("button", { text: "复制" });
+			copyBtn.addEventListener("click", () => {
+				const code = pre.querySelector("code");
+				void navigator.clipboard
+					.writeText(code?.innerText ?? "")
+					.then(() => new Notice("已复制代码"));
+			});
+			const insertBtn = bar.createEl("button", { text: "插入笔记" });
+			insertBtn.addEventListener("click", () => {
+				const code = pre.querySelector("code");
+				this.insertIntoNote(code?.innerText ?? "");
+			});
+			pre.appendChild(bar);
+		});
+	}
+
+	private insertIntoNote(text: string): void {
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		const editor = view?.editor;
+		if (!editor) {
+			new Notice("请先打开一个笔记");
+			return;
+		}
+		const cursor = editor.getCursor();
+		editor.replaceRange(text + "\n", cursor);
+		new Notice("已插入到当前笔记");
+	}
+
+	private scrollToBottom(): void {
+		this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+	}
+
+	private setBusy(busy: boolean): void {
+		this.generating = busy;
+		this.sendBtn.disabled = busy;
+		this.sendBtn.style.display = busy ? "none" : "";
+		this.stopBtn.style.display = busy ? "" : "none";
+		this.inputEl.disabled = busy;
+	}
+
+	private stop(): void {
+		if (this.abortController) {
+			this.abortController.abort();
+			this.abortController = null;
+			this.setBusy(false);
+		}
+	}
+
+	private logout(): void {
+		if (!window.confirm("确定退出登录？将清除已保存的凭证。")) return;
+		this.stop();
+		this.plugin.settings.apiKey = "";
+		void this.plugin.saveAll();
+		this.plugin.updateStatusBar();
+		this.render();
+		new Notice("已退出登录");
+	}
+
+	private async sendText(text: string): Promise<void> {
+		this.inputEl.value = text;
+		await this.send();
+	}
+
+	// ============ @ 引用（参照 Continue 的 @file 上下文） ============
+
+	private onInput(): void {
+		const value = this.inputEl.value;
+		const caret = this.inputEl.selectionStart ?? value.length;
+		const before = value.slice(0, caret);
+		const match = before.match(/@([^\s@]*)$/);
+		if (match) {
+			this.showAtPopup(match[1]);
+		} else {
+			this.hideAtPopup();
+		}
+	}
+
+	private onInputKeydown(e: KeyboardEvent): void {
+		if (this.popupEl) {
+			if (e.key === "ArrowDown") {
+				e.preventDefault();
+				this.popupIndex = Math.min(
+					this.popupIndex + 1,
+					this.popupItems.length - 1
+				);
+				this.highlightPopup();
+				return;
+			}
+			if (e.key === "ArrowUp") {
+				e.preventDefault();
+				this.popupIndex = Math.max(this.popupIndex - 1, 0);
+				this.highlightPopup();
+				return;
+			}
+			if (e.key === "Enter" || e.key === "Tab") {
+				e.preventDefault();
+				const file = this.popupItems[this.popupIndex];
+				if (file) this.selectAtFile(file);
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				this.hideAtPopup();
+				return;
+			}
+		}
+		if (e.key === "Enter" && !e.shiftKey) {
+			e.preventDefault();
+			void this.send();
+		}
+	}
+
+	private showAtPopup(query: string): void {
+		const files = this.app.vault
+			.getMarkdownFiles()
+			.filter((f) => !f.path.startsWith(".obsidian/"))
+			.filter((f) =>
+				query
+					? (f.basename + f.path).toLowerCase().includes(query.toLowerCase())
+					: true
+			)
+			.slice(0, 20);
+		this.popupItems = files;
+		this.popupIndex = 0;
+
+		if (!this.popupEl) {
+			const root = this.containerEl.children[1] as HTMLElement;
+			this.popupEl = root.createDiv({ cls: "qoder-at-popup" });
+		}
+		this.popupEl.empty();
+		if (files.length === 0) {
+			this.popupEl.createDiv({
+				cls: "qoder-at-item qoder-at-empty",
+				text: "没有匹配的笔记",
+			});
+			return;
+		}
+		files.forEach((f, idx) => {
+			const item = this.popupEl!.createDiv({ cls: "qoder-at-item" });
+			item.createSpan({ cls: "qoder-at-name", text: f.basename });
+			item.createSpan({ cls: "qoder-at-path", text: f.path });
+			if (idx === this.popupIndex) item.addClass("qoder-at-active");
+			item.addEventListener("mousedown", (e) => {
+				e.preventDefault();
+				this.selectAtFile(f);
+			});
+		});
+	}
+
+	private highlightPopup(): void {
+		if (!this.popupEl) return;
+		this.popupEl.querySelectorAll(".qoder-at-item").forEach((el, idx) => {
+			el.toggleClass("qoder-at-active", idx === this.popupIndex);
+		});
+	}
+
+	private hideAtPopup(): void {
+		this.popupEl?.remove();
+		this.popupEl = null;
+	}
+
+	private selectAtFile(file: TFile): void {
+		// 从输入框中移除 @query 片段，插入 @文件名
+		const value = this.inputEl.value;
+		const caret = this.inputEl.selectionStart ?? value.length;
+		const before = value.slice(0, caret);
+		const match = before.match(/@([^\s@]*)$/);
+		if (match && match.index !== undefined) {
+			const insert = `@${file.basename} `;
+			this.inputEl.value =
+				before.slice(0, match.index) + insert + value.slice(caret);
+			this.inputEl.focus();
+			const pos = match.index + insert.length;
+			this.inputEl.setSelectionRange(pos, pos);
+		}
+		if (!this.attachedFiles.includes(file.path)) {
+			this.attachedFiles.push(file.path);
+		}
+		this.hideAtPopup();
+		this.renderChips();
+	}
+
+	private renderChips(): void {
+		this.chipsEl.empty();
+		if (this.attachedFiles.length === 0) {
+			this.chipsEl.style.display = "none";
+			return;
+		}
+		this.chipsEl.style.display = "";
+		for (const path of this.attachedFiles) {
+			const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+			const name = path.split("/").pop()?.replace(/\.md$/, "") ?? path;
+			chip.createSpan({ text: `📄 ${name}` });
+			const x = chip.createSpan({ cls: "qoder-chip-x", text: "×" });
+			x.addEventListener("click", () => {
+				this.attachedFiles = this.attachedFiles.filter((p) => p !== path);
+				this.renderChips();
+			});
+		}
+	}
+
+	// ============ 发送 ============
+
+	async send(): Promise<void> {
+		let text = this.inputEl.value.trim();
+		if (!text || this.abortController) return;
+
+		const settings = this.plugin.settings;
+		if (!settings.apiKey) {
+			new Notice("请先登录");
+			return;
+		}
+
+		// 去掉文本中的 @文件名 标记（内容将以上下文块注入）
+		for (const path of this.attachedFiles) {
+			const name = path.split("/").pop()?.replace(/\.md$/, "") ?? "";
+			if (name) text = text.replace(new RegExp(`@${name}\\s?`, "g"), "");
+		}
+		text = text.trim();
+		if (!text) return;
+
+		this.inputEl.value = "";
+		const attached = [...this.attachedFiles];
+		this.attachedFiles = [];
+		this.renderChips();
+
+		const session = this.plugin.currentSession();
+		const userMsg: ChatMessage = { role: "user", content: text };
+		session.messages.push(userMsg);
+
+		const assistantMsg: ChatMessage = { role: "assistant", content: "" };
+		session.messages.push(assistantMsg);
+
+		this.renderMessages();
+		const assistantEl = this.messagesEl.lastElementChild as HTMLElement;
+		assistantEl.empty();
+		assistantEl.createSpan({ cls: "qoder-thinking", text: "思考中…" });
+		this.setBusy(true);
+
+		const requestMessages = await this.buildRequestMessages(attached);
+
+		let acc = "";
+		this.abortController = chatCompletion(
+			settings,
+			requestMessages,
+			{
+				onToken: (partial) => {
+					acc += partial;
+					assistantMsg.content = acc;
+					assistantEl.empty();
+					MarkdownRenderer.render(
+						this.app,
+						acc,
+						assistantEl,
+						"",
+						this
+					)
+						.then(() => this.addCodeActions(assistantEl))
+						.catch(() => assistantEl.setText(acc));
+					this.scrollToBottom();
+				},
+				onError: (message) => {
+					assistantMsg.role = "error";
+					assistantMsg.content = message;
+					assistantEl.className = "qoder-msg qoder-msg-system-err";
+					assistantEl.setText(message);
+					new Notice(message);
+				},
+			},
+			() => {
+				this.abortController = null;
+				this.setBusy(false);
+				if (!assistantMsg.content) {
+					assistantEl.empty();
+					assistantEl.setText("(无内容)");
+				} else {
+					this.addCodeActions(assistantEl);
+				}
+				this.plugin.touchSession(session);
+				void this.plugin.saveAll();
+				this.scrollToBottom();
+			}
+		);
+	}
+
+	/** 组装请求：系统提示 + Rules + 当前笔记 + @引用文件 + 历史 */
+	private async buildRequestMessages(
+		attached: string[]
+	): Promise<LlmRequestMessage[]> {
+		const settings = this.plugin.settings;
+		const session = this.plugin.currentSession();
+		const out: LlmRequestMessage[] = [];
+		out.push({ role: "system", content: settings.systemPrompt });
+
+		if (settings.rulesEnabled) {
+			const rules = await loadRules(this.app);
+			if (rules) {
+				out.push({
+					role: "system",
+					content: `以下是必须遵守的规则：\n${rules}`,
+				});
+			}
+		}
+
+		if (settings.includeActiveNote) {
+			const note = await this.getActiveNoteContext();
+			if (note) {
+				out.push({
+					role: "system",
+					content: `当前笔记「${note.title}」内容如下，回答时可参考：\n${note.body}`,
+				});
+			}
+		}
+
+		// @ 引用的笔记：按 Continue 的格式以代码块注入
+		for (const path of attached) {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile) {
+				try {
+					const content = await this.app.vault.read(file);
+					out.push({
+						role: "system",
+						content: "```" + path + "\n" + content + "\n```",
+					});
+				} catch {
+					// 跳过读取失败的文件
+				}
+			}
+		}
+
+		for (const m of session.messages) {
+			if ((m.role === "user" || m.role === "assistant") && m.content) {
+				out.push({ role: m.role, content: m.content });
+			}
+		}
+		return out;
+	}
+
+	private async getActiveNoteContext(): Promise<{
+		title: string;
+		body: string;
+	} | null> {
+		const file = this.app.workspace.getActiveFile();
+		if (!file || file.extension !== "md") return null;
+		try {
+			let content = await this.app.vault.read(file);
+			const max = this.plugin.settings.maxNoteChars;
+			if (content.length > max) {
+				content = content.slice(0, max) + "\n…(内容过长已截断)";
+			}
+			return { title: file.basename, body: content };
+		} catch {
+			return null;
+		}
+	}
+}
