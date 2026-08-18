@@ -19,7 +19,7 @@ import {
 import { PROVIDER_MODELS, SUGGESTIONS } from "./settings";
 import { chatCompletion, verifyApiKey, LlmRequestMessage } from "./llm";
 import { loadRules } from "./rules";
-import { agentToolPrompt, applyEdit, parseEditBlocks } from "./fileTools";
+import { agentToolPrompt, applyEdit, parseEditBlocks, ParsedEdit } from "./fileTools";
 import { lineDiff } from "./diff";
 
 export const VIEW_TYPE_QODER_CHAT = "qoder-chat-view";
@@ -426,11 +426,8 @@ export class QoderChatView extends ItemView {
 			return;
 		}
 		for (const msg of session.messages) {
-			const el = this.appendMessageEl(msg);
-			if (msg.role === "assistant") {
-				this.addCodeActions(el);
-				this.renderEditCards(el, msg.content);
-			}
+			// 代码块操作与审批卡片统一在 appendMessageEl 的渲染回调中添加，避免重复渲染
+			this.appendMessageEl(msg);
 		}
 		this.scrollToBottom();
 	}
@@ -509,9 +506,37 @@ export class QoderChatView extends ItemView {
 
 	// ============ 文件修改审批卡片（Agent 模式） ============
 
+	/** 移除已被识别为编辑块的原始代码块，避免 JSON 与审批卡片同时展示 */
+	private stripRenderedEditBlocks(
+		container: HTMLElement,
+		parsed: ParsedEdit[]
+	): void {
+		const raws = new Set(
+			parsed.filter((p) => p.edit !== null).map((p) => p.raw)
+		);
+		container.querySelectorAll("pre").forEach((pre) => {
+			let t = (
+				pre.querySelector("code")?.textContent ??
+				pre.textContent ??
+				""
+			).trim();
+			const firstLine = t.split("\n", 1)[0].trim();
+			if (/^qoder[-_ ]?edit$/i.test(firstLine)) {
+				t = t.slice(firstLine.length).trim();
+			}
+			if (raws.has(t)) pre.remove();
+		});
+	}
+
 	private renderEditCards(container: HTMLElement, text: string): void {
 		const parsed = parseEditBlocks(text);
-		if (parsed.length === 0) return;
+		if (parsed.length > 0) {
+			this.stripRenderedEditBlocks(container, parsed);
+		}
+		// 防重：同一条消息只渲染一次审批卡片
+		if (parsed.length === 0 || container.querySelector(".qoder-edit-cards")) {
+			return;
+		}
 
 		const wrap = container.createDiv({ cls: "qoder-edit-cards" });
 		wrap.createDiv({

@@ -774,11 +774,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       return;
     }
     for (const msg of session.messages) {
-      const el = this.appendMessageEl(msg);
-      if (msg.role === "assistant") {
-        this.addCodeActions(el);
-        this.renderEditCards(el, msg.content);
-      }
+      this.appendMessageEl(msg);
     }
     this.scrollToBottom();
   }
@@ -844,10 +840,30 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     new import_obsidian2.Notice("\u5DF2\u63D2\u5165\u5230\u5F53\u524D\u7B14\u8BB0");
   }
   // ============ 文件修改审批卡片（Agent 模式） ============
+  /** 移除已被识别为编辑块的原始代码块，避免 JSON 与审批卡片同时展示 */
+  stripRenderedEditBlocks(container, parsed) {
+    const raws = new Set(
+      parsed.filter((p) => p.edit !== null).map((p) => p.raw)
+    );
+    container.querySelectorAll("pre").forEach((pre) => {
+      var _a, _b, _c;
+      let t = ((_c = (_b = (_a = pre.querySelector("code")) == null ? void 0 : _a.textContent) != null ? _b : pre.textContent) != null ? _c : "").trim();
+      const firstLine = t.split("\n", 1)[0].trim();
+      if (/^qoder[-_ ]?edit$/i.test(firstLine)) {
+        t = t.slice(firstLine.length).trim();
+      }
+      if (raws.has(t)) pre.remove();
+    });
+  }
   renderEditCards(container, text) {
     var _a, _b, _c, _d;
     const parsed = parseEditBlocks(text);
-    if (parsed.length === 0) return;
+    if (parsed.length > 0) {
+      this.stripRenderedEditBlocks(container, parsed);
+    }
+    if (parsed.length === 0 || container.querySelector(".qoder-edit-cards")) {
+      return;
+    }
     const wrap = container.createDiv({ cls: "qoder-edit-cards" });
     wrap.createDiv({
       cls: "qoder-edit-cards-title",
