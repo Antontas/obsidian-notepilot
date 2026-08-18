@@ -27,15 +27,59 @@ var import_view = require("@codemirror/view");
 
 // src/settings.ts
 var PROVIDER_PRESETS = {
-  openai: {
-    baseUrl: "https://api.openai.com/v1",
-    model: "gpt-4o-mini",
-    label: "OpenAI \u517C\u5BB9\u63A5\u53E3"
-  },
   dashscope: {
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen3.7-plus",
-    label: "\u963F\u91CC\u4E91\u767E\u70BC DashScope"
+    label: "\u963F\u91CC\u4E91\u767E\u70BC DashScope",
+    keyUrl: "https://bailian.console.aliyun.com/"
+  },
+  openai: {
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini",
+    label: "OpenAI",
+    keyUrl: "https://platform.openai.com/api-keys"
+  },
+  deepseek: {
+    baseUrl: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+    label: "DeepSeek \u6DF1\u5EA6\u6C42\u7D22",
+    keyUrl: "https://platform.deepseek.com/"
+  },
+  moonshot: {
+    baseUrl: "https://api.moonshot.cn/v1",
+    model: "moonshot-v1-8k",
+    label: "Moonshot Kimi",
+    keyUrl: "https://platform.moonshot.cn/"
+  },
+  zhipu: {
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    model: "glm-4-flash",
+    label: "\u667A\u8C31 GLM",
+    keyUrl: "https://open.bigmodel.cn/"
+  },
+  siliconflow: {
+    baseUrl: "https://api.siliconflow.cn/v1",
+    model: "deepseek-ai/DeepSeek-V3",
+    label: "\u7845\u57FA\u6D41\u52A8 SiliconFlow",
+    keyUrl: "https://cloud.siliconflow.cn/"
+  },
+  ollama: {
+    baseUrl: "http://localhost:11434/v1",
+    model: "llama3.2",
+    label: "Ollama \u672C\u5730\u670D\u52A1",
+    keyUrl: "https://ollama.com/"
+  },
+  openrouter: {
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "anthropic/claude-3.5-sonnet",
+    label: "OpenRouter",
+    keyUrl: "https://openrouter.ai/keys"
+  },
+  groq: {
+    baseUrl: "https://api.groq.com/openai/v1",
+    model: "llama-3.3-70b-versatile",
+    label: "Groq",
+    keyUrl: "https://console.groq.com/keys"
   }
 };
 var PROVIDER_MODELS = {
@@ -51,7 +95,32 @@ var PROVIDER_MODELS = {
     "qwen3.7-max",
     "glm-5.2"
   ],
-  openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "o3-mini"]
+  openai: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "o3-mini"],
+  deepseek: ["deepseek-chat", "deepseek-reasoner"],
+  moonshot: [
+    "moonshot-v1-8k",
+    "moonshot-v1-32k",
+    "moonshot-v1-128k",
+    "kimi-k2-0711-preview"
+  ],
+  zhipu: ["glm-4-flash", "glm-4-plus", "glm-4-air", "glm-5.2"],
+  siliconflow: [
+    "deepseek-ai/DeepSeek-V3",
+    "Qwen/Qwen2.5-72B-Instruct",
+    "THUDM/glm-4-9b-chat"
+  ],
+  ollama: ["llama3.2", "qwen2.5:7b", "deepseek-r1:7b", "mistral"],
+  openrouter: [
+    "anthropic/claude-3.5-sonnet",
+    "openai/gpt-4o",
+    "google/gemini-2.0-flash-001",
+    "deepseek/deepseek-chat"
+  ],
+  groq: [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768"
+  ]
 };
 var SUGGESTIONS = [
   { title: "\u603B\u7ED3\u7B14\u8BB0", prompt: "\u8BF7\u603B\u7ED3\u5F53\u524D\u7B14\u8BB0\u7684\u6838\u5FC3\u8981\u70B9\uFF0C\u7528\u7B80\u6D01\u7684\u6761\u76EE\u5217\u51FA\u3002" },
@@ -493,12 +562,22 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     card.createEl("h2", { cls: "qoder-login-title", text: "\u767B\u5F55 Qoder Clone" });
     card.createEl("p", {
       cls: "qoder-login-desc",
-      text: "\u4F7F\u7528\u963F\u91CC\u4E91\u767E\u70BC\uFF08DashScope\uFF09\u51ED\u8BC1\u767B\u5F55\uFF0C\u5BC6\u94A5\u4EC5\u4FDD\u5B58\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
+      text: "\u9009\u62E9\u670D\u52A1\u5546\u5E76\u8F93\u5165 API Key \u767B\u5F55\uFF0C\u5BC6\u94A5\u4EC5\u4FDD\u5B58\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
     });
+    const providerSelect = card.createEl("select", {
+      cls: "qoder-login-input"
+    });
+    for (const [p, preset] of Object.entries(PROVIDER_PRESETS)) {
+      const opt = providerSelect.createEl("option", {
+        value: p,
+        text: preset.label
+      });
+      if (p === this.plugin.settings.provider) opt.selected = true;
+    }
     const keyInput = card.createEl("input", {
       cls: "qoder-login-input",
       type: "password",
-      attr: { placeholder: "\u8F93\u5165\u963F\u91CC\u4E91\u767E\u70BC API Key\uFF08sk-...\uFF09" }
+      attr: { placeholder: "\u8F93\u5165 API Key\uFF08sk-...\uFF09" }
     });
     const adv = card.createDiv({ cls: "qoder-login-adv" });
     adv.createEl("label", { text: "Base URL" });
@@ -514,21 +593,40 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     });
     const link = card.createEl("a", {
       cls: "qoder-login-link",
-      text: "\u524D\u5F80\u963F\u91CC\u4E91\u767E\u70BC\u83B7\u53D6 API Key \u2192"
+      text: "\u83B7\u53D6 API Key \u2192"
+    });
+    const applyProvider = (p) => {
+      const preset = PROVIDER_PRESETS[p];
+      this.plugin.settings.provider = p;
+      this.plugin.settings.baseUrl = preset.baseUrl;
+      this.plugin.settings.model = preset.model;
+      urlInput.value = preset.baseUrl;
+      keyInput.setAttribute(
+        "placeholder",
+        p === "ollama" ? "\u672C\u5730\u670D\u52A1\u65E0\u9700\u5BC6\u94A5\uFF0C\u53EF\u7559\u7A7A" : `\u8F93\u5165 ${preset.label} API Key\uFF08sk-...\uFF09`
+      );
+      link.setText(`\u524D\u5F80 ${preset.label} \u83B7\u53D6 API Key \u2192`);
+    };
+    applyProvider(this.plugin.settings.provider);
+    providerSelect.addEventListener("change", () => {
+      applyProvider(providerSelect.value);
     });
     link.addEventListener("click", (e) => {
       e.preventDefault();
-      void window.open("https://bailian.console.aliyun.com/", "_blank");
+      const preset = PROVIDER_PRESETS[this.plugin.settings.provider];
+      void window.open(preset.keyUrl, "_blank");
     });
     const doLogin = async () => {
+      const provider = providerSelect.value;
       const key = keyInput.value.trim();
-      if (!key) {
+      if (!key && provider !== "ollama") {
         statusEl.setText("\u8BF7\u8F93\u5165 API Key");
         return;
       }
       loginBtn.disabled = true;
       statusEl.setText("\u6B63\u5728\u9A8C\u8BC1\u51ED\u8BC1\u2026");
-      this.plugin.settings.apiKey = key;
+      this.plugin.settings.provider = provider;
+      this.plugin.settings.apiKey = key || "ollama";
       const url = urlInput.value.trim();
       if (url) this.plugin.settings.baseUrl = url;
       const result = await verifyApiKey(this.plugin.settings);
@@ -1796,19 +1894,20 @@ var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName("\u767B\u5F55\u72B6\u6001").setDesc(
       this.plugin.isLoggedIn() ? `\u5DF2\u767B\u5F55\uFF08\u6A21\u578B\uFF1A${this.plugin.settings.model}\uFF09` : "\u672A\u767B\u5F55\uFF0C\u8BF7\u5728\u804A\u5929\u9762\u677F\u767B\u5F55\u9875\u8F93\u5165\u51ED\u8BC1"
     );
-    new import_obsidian3.Setting(containerEl).setName("\u670D\u52A1\u5546\u9884\u8BBE").setDesc("\u9009\u62E9\u540E\u81EA\u52A8\u586B\u5145\u5BF9\u5E94\u7684 Base URL \u4E0E\u9ED8\u8BA4\u6A21\u578B").addDropdown(
-      (dropdown) => dropdown.addOptions({
-        dashscope: PROVIDER_PRESETS.dashscope.label,
-        openai: PROVIDER_PRESETS.openai.label
-      }).setValue(this.plugin.settings.provider).onChange(async (value) => {
+    new import_obsidian3.Setting(containerEl).setName("\u670D\u52A1\u5546\u9884\u8BBE").setDesc("\u9009\u62E9\u540E\u81EA\u52A8\u586B\u5145\u5BF9\u5E94\u7684 Base URL \u4E0E\u9ED8\u8BA4\u6A21\u578B").addDropdown((dropdown) => {
+      const options = {};
+      for (const [k, v] of Object.entries(PROVIDER_PRESETS)) {
+        options[k] = v.label;
+      }
+      return dropdown.addOptions(options).setValue(this.plugin.settings.provider).onChange(async (value) => {
         this.plugin.settings.provider = value;
         const preset = PROVIDER_PRESETS[value];
         this.plugin.settings.baseUrl = preset.baseUrl;
         this.plugin.settings.model = preset.model;
         await this.plugin.saveAll();
         this.display();
-      })
-    );
+      });
+    });
     new import_obsidian3.Setting(containerEl).setName("Base URL").setDesc("OpenAI \u517C\u5BB9\u63A5\u53E3\u5730\u5740").addText(
       (text) => text.setPlaceholder("https://.../v1").setValue(this.plugin.settings.baseUrl).onChange(async (value) => {
         this.plugin.settings.baseUrl = value.trim();

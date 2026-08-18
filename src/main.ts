@@ -18,6 +18,7 @@ import {
 	QoderChatSettings,
 	StoredData,
 } from "./settings";
+import type { Provider } from "./settings";
 import {
 	ChatSession,
 	createSession,
@@ -497,22 +498,23 @@ class QoderChatSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("服务商预设")
 			.setDesc("选择后自动填充对应的 Base URL 与默认模型")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOptions({
-						dashscope: PROVIDER_PRESETS.dashscope.label,
-						openai: PROVIDER_PRESETS.openai.label,
-					})
+			.addDropdown((dropdown) => {
+				const options: Record<string, string> = {};
+				for (const [k, v] of Object.entries(PROVIDER_PRESETS)) {
+					options[k] = v.label;
+				}
+				return dropdown
+					.addOptions(options)
 					.setValue(this.plugin.settings.provider)
-					.onChange(async (value: "openai" | "dashscope") => {
+					.onChange(async (value: Provider) => {
 						this.plugin.settings.provider = value;
 						const preset = PROVIDER_PRESETS[value];
 						this.plugin.settings.baseUrl = preset.baseUrl;
 						this.plugin.settings.model = preset.model;
 						await this.plugin.saveAll();
 						this.display();
-					})
-			);
+					});
+			});
 
 		new Setting(containerEl)
 			.setName("Base URL")

@@ -16,7 +16,8 @@ import {
 	formatDate,
 	sessionToMarkdown,
 } from "./sessions";
-import { PROVIDER_MODELS, SUGGESTIONS } from "./settings";
+import { PROVIDER_MODELS, PROVIDER_PRESETS, SUGGESTIONS } from "./settings";
+import type { Provider } from "./settings";
 import { chatCompletion, verifyApiKey, LlmRequestMessage } from "./llm";
 import { loadRules } from "./rules";
 import { agentToolPrompt, applyEdit, parseEditBlocks, ParsedEdit } from "./fileTools";
@@ -99,13 +100,25 @@ export class QoderChatView extends ItemView {
 		card.createEl("h2", { cls: "qoder-login-title", text: "登录 Qoder Clone" });
 		card.createEl("p", {
 			cls: "qoder-login-desc",
-			text: "使用阿里云百炼（DashScope）凭证登录，密钥仅保存在本机 Obsidian 配置中。",
+			text: "选择服务商并输入 API Key 登录，密钥仅保存在本机 Obsidian 配置中。",
 		});
+
+		// 服务商选择
+		const providerSelect = card.createEl("select", {
+			cls: "qoder-login-input",
+		});
+		for (const [p, preset] of Object.entries(PROVIDER_PRESETS)) {
+			const opt = providerSelect.createEl("option", {
+				value: p,
+				text: preset.label,
+			});
+			if (p === this.plugin.settings.provider) opt.selected = true;
+		}
 
 		const keyInput = card.createEl("input", {
 			cls: "qoder-login-input",
 			type: "password",
-			attr: { placeholder: "输入阿里云百炼 API Key（sk-...）" },
+			attr: { placeholder: "输入 API Key（sk-...）" },
 		});
 
 		const adv = card.createDiv({ cls: "qoder-login-adv" });
@@ -125,22 +138,47 @@ export class QoderChatView extends ItemView {
 
 		const link = card.createEl("a", {
 			cls: "qoder-login-link",
-			text: "前往阿里云百炼获取 API Key →",
+			text: "获取 API Key →",
 		});
+
+		// 切换服务商：同步 Base URL、默认模型、占位提示与获取链接
+		const applyProvider = (p: Provider) => {
+			const preset = PROVIDER_PRESETS[p];
+			this.plugin.settings.provider = p;
+			this.plugin.settings.baseUrl = preset.baseUrl;
+			this.plugin.settings.model = preset.model;
+			urlInput.value = preset.baseUrl;
+			keyInput.setAttribute(
+				"placeholder",
+				p === "ollama"
+					? "本地服务无需密钥，可留空"
+					: `输入 ${preset.label} API Key（sk-...）`
+			);
+			link.setText(`前往 ${preset.label} 获取 API Key →`);
+		};
+		applyProvider(this.plugin.settings.provider);
+		providerSelect.addEventListener("change", () => {
+			applyProvider(providerSelect.value as Provider);
+		});
+
 		link.addEventListener("click", (e) => {
 			e.preventDefault();
-			void window.open("https://bailian.console.aliyun.com/", "_blank");
+			const preset = PROVIDER_PRESETS[this.plugin.settings.provider];
+			void window.open(preset.keyUrl, "_blank");
 		});
 
 		const doLogin = async () => {
+			const provider = providerSelect.value as Provider;
 			const key = keyInput.value.trim();
-			if (!key) {
+			if (!key && provider !== "ollama") {
 				statusEl.setText("请输入 API Key");
 				return;
 			}
 			loginBtn.disabled = true;
 			statusEl.setText("正在验证凭证…");
-			this.plugin.settings.apiKey = key;
+			this.plugin.settings.provider = provider;
+			// Ollama 本地服务无需密钥
+			this.plugin.settings.apiKey = key || "ollama";
 			const url = urlInput.value.trim();
 			if (url) this.plugin.settings.baseUrl = url;
 			const result = await verifyApiKey(this.plugin.settings);
