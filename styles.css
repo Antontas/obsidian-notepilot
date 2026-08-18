@@ -285,27 +285,6 @@
 	outline-offset: 2px;
 }
 
-/* ---------- 划词自动识别：选区旁浮动按钮 ---------- */
-
-.qoder-ask-widget {
-	background: var(--interactive-accent);
-	color: var(--text-on-accent);
-	border: none;
-	border-radius: 999px;
-	padding: 3px 10px;
-	font-size: 12px;
-	line-height: 1.5;
-	cursor: pointer;
-	margin-left: 4px;
-	vertical-align: middle;
-	box-shadow: var(--shadow-s);
-	white-space: nowrap;
-}
-
-.qoder-ask-widget:hover {
-	filter: brightness(1.12);
-}
-
 .qoder-chat-input {
 	width: 100%;
 	resize: none;

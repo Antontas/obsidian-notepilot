@@ -341,6 +341,12 @@ export class QoderChatView extends ItemView {
 		this.messagesEl = root.createDiv({ cls: "qoder-chat-messages" });
 		this.renderMessages();
 
+		// 自动识别划词：渲染聊天界面时消费暂存的选区文本
+		if (this.quotedText === null && this.plugin.pendingQuotedText) {
+			this.quotedText = this.plugin.pendingQuotedText;
+			this.plugin.pendingQuotedText = null;
+		}
+
 		// 附加文件 chips
 		this.chipsEl = root.createDiv({ cls: "qoder-chips" });
 		this.renderChips();
@@ -847,12 +853,15 @@ export class QoderChatView extends ItemView {
 
 	// ============ 划词提问与拖拽附加 ============
 
-	/** 划词提问：引用编辑器中选中的文本作为提问上下文 */
-	attachQuotedText(text: string): void {
+	/** 划词提问：引用选中文本作为提问上下文（silent 用于自动识别场景，不提示、不抢焦点） */
+	attachQuotedText(text: string, silent = false): void {
 		this.quotedText = text;
+		this.plugin.pendingQuotedText = null;
 		this.renderChips();
-		if (this.inputEl) this.inputEl.focus();
-		new Notice("已引用选中文本，输入问题后发送");
+		if (!silent) {
+			if (this.inputEl) this.inputEl.focus();
+			new Notice("已引用选中文本，输入问题后发送");
+		}
 	}
 
 	private async onDropFiles(evt: DragEvent): Promise<void> {

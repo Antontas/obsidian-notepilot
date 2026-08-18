@@ -706,6 +706,10 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     logoutBtn.addEventListener("click", () => this.logout());
     this.messagesEl = root.createDiv({ cls: "qoder-chat-messages" });
     this.renderMessages();
+    if (this.quotedText === null && this.plugin.pendingQuotedText) {
+      this.quotedText = this.plugin.pendingQuotedText;
+      this.plugin.pendingQuotedText = null;
+    }
     this.chipsEl = root.createDiv({ cls: "qoder-chips" });
     this.renderChips();
     const inputBox = root.createDiv({ cls: "qoder-input-box" });
@@ -1132,12 +1136,15 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     }
   }
   // ============ 划词提问与拖拽附加 ============
-  /** 划词提问：引用编辑器中选中的文本作为提问上下文 */
-  attachQuotedText(text) {
+  /** 划词提问：引用选中文本作为提问上下文（silent 用于自动识别场景，不提示、不抢焦点） */
+  attachQuotedText(text, silent = false) {
     this.quotedText = text;
+    this.plugin.pendingQuotedText = null;
     this.renderChips();
-    if (this.inputEl) this.inputEl.focus();
-    new import_obsidian2.Notice("\u5DF2\u5F15\u7528\u9009\u4E2D\u6587\u672C\uFF0C\u8F93\u5165\u95EE\u9898\u540E\u53D1\u9001");
+    if (!silent) {
+      if (this.inputEl) this.inputEl.focus();
+      new import_obsidian2.Notice("\u5DF2\u5F15\u7528\u9009\u4E2D\u6587\u672C\uFF0C\u8F93\u5165\u95EE\u9898\u540E\u53D1\u9001");
+    }
   }
   async onDropFiles(evt) {
     evt.preventDefault();
@@ -1354,55 +1361,27 @@ ${quoted}
 };
 
 // src/main.ts
-var SelectionAskWidget = class extends import_view.WidgetType {
-  constructor(text, plugin) {
-    super();
-    this.text = text;
-    this.plugin = plugin;
-  }
-  toDOM() {
-    const btn = document.createElement("button");
-    btn.addClass("qoder-ask-widget");
-    btn.setText("\u95EE\u95EE AI");
-    btn.setAttribute("aria-label", "\u5212\u8BCD\u63D0\u95EE\uFF1A\u5C31\u9009\u4E2D\u6587\u672C\u63D0\u95EE");
-    btn.addEventListener("mousedown", (e) => e.preventDefault());
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      void this.plugin.askSelection(this.text);
-    });
-    return btn;
-  }
-};
-function selectionAskExtension(plugin) {
+function selectionAutoQuoteExtension(plugin) {
   return import_view.ViewPlugin.fromClass(
     class {
       constructor(view) {
-        this.decorations = this.build(view);
+        this.timer = null;
       }
       update(u) {
-        if (u.docChanged || u.selectionSet || u.focusChanged) {
-          this.decorations = this.build(u.view);
-        }
-      }
-      build(view) {
-        const ranges = [];
-        const sel = view.state.selection.main;
-        if (view.hasFocus && !sel.empty) {
+        if (!u.selectionSet && !u.docChanged) return;
+        if (this.timer !== null) window.clearTimeout(this.timer);
+        this.timer = window.setTimeout(() => {
+          const view = u.view;
+          const sel = view.state.selection.main;
+          if (!view.hasFocus || sel.empty) return;
           const text = view.state.sliceDoc(sel.from, sel.to);
-          if (text.trim()) {
-            ranges.push(
-              import_view.Decoration.widget({
-                widget: new SelectionAskWidget(text, plugin),
-                side: 1
-              }).range(sel.to)
-            );
-          }
-        }
-        return import_view.Decoration.set(ranges, true);
+          if (text.trim()) plugin.autoQuoteSelection(text);
+        }, 600);
       }
-    },
-    { decorations: (v) => v.decorations }
+      destroy() {
+        if (this.timer !== null) window.clearTimeout(this.timer);
+      }
+    }
   );
 }
 var QoderChatPlugin = class extends import_obsidian3.Plugin {
@@ -1412,6 +1391,8 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
     this.sessions = [];
     this.currentSessionId = "";
     this.statusBarEl = null;
+    /** 自动识别划词时暂存的选区文本（面板未打开时暂存，面板打开后消费） */
+    this.pendingQuotedText = null;
   }
   isLoggedIn() {
     return this.settings.apiKey.trim().length > 0;
@@ -1513,7 +1494,7 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
       }
     });
     this.addSettingTab(new QoderChatSettingTab(this.app, this));
-    this.registerEditorExtension(selectionAskExtension(this));
+    this.registerEditorExtension(selectionAutoQuoteExtension(this));
   }
   updateStatusBar() {
     if (!this.statusBarEl) return;
@@ -1549,6 +1530,13 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
     const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
     const view = leaf == null ? void 0 : leaf.view;
     view == null ? void 0 : view.attachQuotedText(text);
+  }
+  /** 自动识别划词：记录选区文本并同步到已打开的面板（不抢焦点、不提示） */
+  autoQuoteSelection(text) {
+    this.pendingQuotedText = text;
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+    const view = leaf == null ? void 0 : leaf.view;
+    view == null ? void 0 : view.attachQuotedText(text, true);
   }
   refreshView() {
     const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
