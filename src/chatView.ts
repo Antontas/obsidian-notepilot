@@ -878,19 +878,64 @@ export class QoderChatView extends ItemView {
 			return;
 		}
 
-		// 库内笔记拖入（文件树拖拽携带路径/链接文本）
+		// 库内笔记拖入（文件树拖拽携带 obsidian:// URI 或纯路径）
 		const plain = dt.getData("text/plain").trim();
 		if (!plain) return;
-		const abs = this.app.vault.getAbstractFileByPath(plain);
-		const file =
-			abs instanceof TFile
-				? abs
-				: this.app.metadataCache.getFirstLinkpathDest(plain, "");
+		const file = this.resolveDraggedFile(plain);
 		if (file instanceof TFile) {
 			this.attachVaultFile(file);
 		} else {
-			new Notice(`无法识别拖入的内容：${plain}`);
+			new Notice(`无法识别拖入的内容：${plain.slice(0, 80)}`);
 		}
+	}
+
+	/** 解析拖入文本：obsidian://open URI / 纯路径 / 笔记名 → TFile */
+	private resolveDraggedFile(plain: string): TFile | null {
+		if (plain.startsWith("obsidian://")) {
+			try {
+				const url = new URL(plain);
+				const file = url.searchParams.get("file");
+				if (file) return this.resolvePlainPath(file);
+			} catch {
+				// URI 解析失败：截取 file= 参数兜底
+				const idx = plain.indexOf("file=");
+				if (idx !== -1) {
+					const raw = plain.slice(idx + 5).split("&")[0];
+					let decoded = raw;
+					try {
+						decoded = decodeURIComponent(raw);
+					} catch {
+						// 保持原样
+					}
+					return this.resolvePlainPath(decoded);
+				}
+			}
+			return null;
+		}
+		return this.resolvePlainPath(plain);
+	}
+
+	/** 依次尝试多种路径解释（+ 可能为路径分隔符或空格），并用笔记名兜底 */
+	private resolvePlainPath(plain: string): TFile | null {
+		const candidates = [
+			plain,
+			plain.replace(/\+/g, "/"),
+			plain.replace(/\+/g, " "),
+		];
+		for (const c of candidates) {
+			const abs = this.app.vault.getAbstractFileByPath(c);
+			if (abs instanceof TFile) return abs;
+			const f = this.app.metadataCache.getFirstLinkpathDest(c, "");
+			if (f instanceof TFile) return f;
+		}
+		// 按文件名（含扩展名）全局兜底
+		for (const c of candidates) {
+			const name = c.split("/").pop() ?? "";
+			if (!name || name === c) continue;
+			const f = this.app.metadataCache.getFirstLinkpathDest(name, "");
+			if (f instanceof TFile) return f;
+		}
+		return null;
 	}
 
 	private attachVaultFile(file: TFile): void {

@@ -1159,13 +1159,57 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     }
     const plain = dt.getData("text/plain").trim();
     if (!plain) return;
-    const abs = this.app.vault.getAbstractFileByPath(plain);
-    const file = abs instanceof import_obsidian2.TFile ? abs : this.app.metadataCache.getFirstLinkpathDest(plain, "");
+    const file = this.resolveDraggedFile(plain);
     if (file instanceof import_obsidian2.TFile) {
       this.attachVaultFile(file);
     } else {
-      new import_obsidian2.Notice(`\u65E0\u6CD5\u8BC6\u522B\u62D6\u5165\u7684\u5185\u5BB9\uFF1A${plain}`);
+      new import_obsidian2.Notice(`\u65E0\u6CD5\u8BC6\u522B\u62D6\u5165\u7684\u5185\u5BB9\uFF1A${plain.slice(0, 80)}`);
     }
+  }
+  /** 解析拖入文本：obsidian://open URI / 纯路径 / 笔记名 → TFile */
+  resolveDraggedFile(plain) {
+    if (plain.startsWith("obsidian://")) {
+      try {
+        const url = new URL(plain);
+        const file = url.searchParams.get("file");
+        if (file) return this.resolvePlainPath(file);
+      } catch (e) {
+        const idx = plain.indexOf("file=");
+        if (idx !== -1) {
+          const raw = plain.slice(idx + 5).split("&")[0];
+          let decoded = raw;
+          try {
+            decoded = decodeURIComponent(raw);
+          } catch (e2) {
+          }
+          return this.resolvePlainPath(decoded);
+        }
+      }
+      return null;
+    }
+    return this.resolvePlainPath(plain);
+  }
+  /** 依次尝试多种路径解释（+ 可能为路径分隔符或空格），并用笔记名兜底 */
+  resolvePlainPath(plain) {
+    var _a;
+    const candidates = [
+      plain,
+      plain.replace(/\+/g, "/"),
+      plain.replace(/\+/g, " ")
+    ];
+    for (const c of candidates) {
+      const abs = this.app.vault.getAbstractFileByPath(c);
+      if (abs instanceof import_obsidian2.TFile) return abs;
+      const f = this.app.metadataCache.getFirstLinkpathDest(c, "");
+      if (f instanceof import_obsidian2.TFile) return f;
+    }
+    for (const c of candidates) {
+      const name = (_a = c.split("/").pop()) != null ? _a : "";
+      if (!name || name === c) continue;
+      const f = this.app.metadataCache.getFirstLinkpathDest(name, "");
+      if (f instanceof import_obsidian2.TFile) return f;
+    }
+    return null;
   }
   attachVaultFile(file) {
     if (file.extension === "md") {
