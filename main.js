@@ -19,7 +19,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // src/main.ts
 var main_exports = {};
 __export(main_exports, {
-  default: () => QoderChatPlugin
+  default: () => NotePilotPlugin
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian3 = require("obsidian");
@@ -176,7 +176,7 @@ var DEFAULT_SETTINGS = {
   baseUrl: PROVIDER_PRESETS.dashscope.baseUrl,
   apiKey: "",
   model: PROVIDER_PRESETS.dashscope.model,
-  systemPrompt: "\u4F60\u662F Qoder Clone\uFF0C\u4E00\u4E2A\u96C6\u6210\u5728 Obsidian \u4E2D\u7684 AI \u7F16\u7A0B\u4E0E\u5199\u4F5C\u52A9\u624B\u3002\u8BF7\u7528\u4E2D\u6587\u56DE\u7B54\uFF0C\u56DE\u7B54\u7B80\u6D01\u3001\u51C6\u786E\uFF0C\u5FC5\u8981\u65F6\u4F7F\u7528 Markdown \u683C\u5F0F\u3002",
+  systemPrompt: "\u4F60\u662F NotePilot\uFF0C\u4E00\u4E2A\u96C6\u6210\u5728 Obsidian \u4E2D\u7684 AI \u7F16\u7A0B\u4E0E\u5199\u4F5C\u52A9\u624B\u3002\u8BF7\u7528\u4E2D\u6587\u56DE\u7B54\uFF0C\u56DE\u7B54\u7B80\u6D01\u3001\u51C6\u786E\uFF0C\u5FC5\u8981\u65F6\u4F7F\u7528 Markdown \u683C\u5F0F\u3002",
   temperature: 0.7,
   maxTokens: 2048,
   stream: true,
@@ -214,7 +214,7 @@ function sessionToMarkdown(session) {
     if (m.role === "user") {
       lines.push("**\u7528\u6237\uFF1A**", "", m.content, "");
     } else if (m.role === "assistant") {
-      lines.push("**Qoder Clone\uFF1A**", "", m.content, "");
+      lines.push("**NotePilot\uFF1A**", "", m.content, "");
     } else {
       lines.push(`> \u26A0\uFE0F ${m.content}`, "");
     }
@@ -755,7 +755,8 @@ function lineDiff(oldText, newText) {
 var import_obsidian2 = require("obsidian");
 
 // src/rules.ts
-var RULES_DIR = ".qoder-rules";
+var RULES_DIR = ".notepilot-rules";
+var LEGACY_RULES_DIR = ".qoder-rules";
 function parseFrontmatter(text) {
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!match) return { body: text, alwaysApply: true };
@@ -764,12 +765,11 @@ function parseFrontmatter(text) {
   return { body, alwaysApply };
 }
 async function loadRules(app) {
-  const folder = app.vault.getAbstractFileByPath(RULES_DIR);
-  if (!folder) return "";
-  const rules = [];
   const files = app.vault.getMarkdownFiles().filter(
-    (f) => f.path.startsWith(RULES_DIR + "/")
+    (f) => f.path.startsWith(RULES_DIR + "/") || f.path.startsWith(LEGACY_RULES_DIR + "/")
   );
+  if (files.length === 0) return "";
+  const rules = [];
   for (const file of files) {
     try {
       const raw = await app.vault.read(file);
@@ -780,8 +780,14 @@ async function loadRules(app) {
     } catch (e) {
     }
   }
-  if (rules.length === 0) return "";
-  return rules.map((r) => `### \u89C4\u5219\uFF1A${r.name}
+  const newNames = new Set(
+    files.filter((f) => f.path.startsWith(RULES_DIR + "/")).map((f) => f.basename)
+  );
+  const deduped = rules.filter(
+    (r) => newNames.has(r.name) || !files.some((f) => f.path.startsWith(LEGACY_RULES_DIR + "/") && f.basename === r.name)
+  );
+  if (deduped.length === 0) return "";
+  return deduped.map((r) => `### \u89C4\u5219\uFF1A${r.name}
 ${r.content}`).join("\n\n");
 }
 
@@ -810,10 +816,11 @@ function parseEditBlocks(text) {
   while ((m = re.exec(text)) !== null) {
     const lang = m[1].trim().toLowerCase();
     let body = m[2].trim();
-    const isEditFence = lang === "qoder-edit" || lang === "qoder_edit";
+    let isEditFence = lang === "notepilot-edit" || lang === "qoder-edit" || lang === "qoder_edit";
     const firstLine = body.split("\n", 1)[0].trim();
-    if (!isEditFence && /^qoder[-_ ]?edit$/i.test(firstLine)) {
+    if (!isEditFence && /^(notepilot|qoder)[-_ ]?edit$/i.test(firstLine)) {
       body = body.slice(firstLine.length).trim();
+      isEditFence = true;
     }
     if (!isEditFence && !body.startsWith("{")) continue;
     try {
@@ -879,23 +886,23 @@ function agentToolPrompt(app) {
   const files = app.vault.getMarkdownFiles().filter((f) => !f.path.startsWith(".obsidian/")).slice(0, 300).map((f) => f.path);
   return [
     "\u4F60\u5F53\u524D\u5904\u4E8E Agent \u6A21\u5F0F\uFF0C\u5177\u5907\u4FEE\u6539\u672C\u5730\u6587\u4EF6\u7684\u80FD\u529B\u3002\u5F53\u7528\u6237\u8981\u6C42\u521B\u5EFA\u3001\u4FEE\u6539\u6216\u66F4\u65B0\u7B14\u8BB0\u65F6\uFF0C\u8BF7\u5728\u6587\u5B57\u56DE\u590D\u4E4B\u540E\u8F93\u51FA\u4E00\u4E2A\u6216\u591A\u4E2A\u7F16\u8F91\u5757\u3002",
-    "\u7F16\u8F91\u5757\u683C\u5F0F\u5FC5\u987B\u4E25\u683C\u4E3A\uFF1A\u4E09\u4E2A\u53CD\u5F15\u53F7 + qoder-edit \u4F5C\u4E3A\u56F4\u680F\u8BED\u8A00\uFF0C\u5757\u5185\u4E3A\u5355\u884C\u6216\u591A\u884C\u7684\u4E25\u683C JSON\u3002\u793A\u4F8B\uFF1A",
-    "```qoder-edit",
+    "\u7F16\u8F91\u5757\u683C\u5F0F\u5FC5\u987B\u4E25\u683C\u4E3A\uFF1A\u4E09\u4E2A\u53CD\u5F15\u53F7 + notepilot-edit \u4F5C\u4E3A\u56F4\u680F\u8BED\u8A00\uFF0C\u5757\u5185\u4E3A\u5355\u884C\u6216\u591A\u884C\u7684\u4E25\u683C JSON\u3002\u793A\u4F8B\uFF1A",
+    "```notepilot-edit",
     '{"action":"replace","path":"\u7B14\u8BB0.md","search":"\u88AB\u66FF\u6362\u7684\u539F\u6587","replace":"\u65B0\u5185\u5BB9"}',
     "```",
     "\u4E09\u79CD action\uFF1A",
     '- \u66FF\u6362\u6587\u4EF6\u4E2D\u7684\u90E8\u5206\u5185\u5BB9\uFF1A{"action":"replace","path":"\u7B14\u8BB0.md","search":"\u88AB\u66FF\u6362\u7684\u539F\u6587\uFF08\u5FC5\u987B\u4E0E\u6587\u4EF6\u5185\u5BB9\u5B8C\u5168\u4E00\u81F4\uFF09","replace":"\u65B0\u5185\u5BB9"}',
     '- \u521B\u5EFA\u65B0\u6587\u4EF6\uFF1A{"action":"create","path":"\u76EE\u5F55/\u65B0\u6587\u4EF6.md","content":"\u5B8C\u6574\u5185\u5BB9"}',
     '- \u8986\u5199\u6574\u4E2A\u6587\u4EF6\uFF1A{"action":"write","path":"\u7B14\u8BB0.md","content":"\u5B8C\u6574\u5185\u5BB9"}',
-    "\u89C4\u5219\uFF1A\u56F4\u680F\u8BED\u8A00\u5FC5\u987B\u662F qoder-edit\uFF0C\u4E0D\u5F97\u6539\u7528 json \u6216\u5176\u4ED6\u8BED\u8A00\uFF1Bpath \u4E3A\u76F8\u5BF9\u5E93\u6839\u76EE\u5F55\u7684\u8DEF\u5F84\uFF1BJSON \u5FC5\u987B\u5408\u6CD5\u4E14\u6B63\u786E\u8F6C\u4E49\u6362\u884C\u4E0E\u5F15\u53F7\uFF1B\u6240\u6709\u4FEE\u6539\u90FD\u4F1A\u5148\u5C55\u793A\u7ED9\u7528\u6237\u5BA1\u6279\u540E\u624D\u751F\u6548\uFF0C\u56E0\u6B64\u53EF\u653E\u5FC3\u8F93\u51FA\uFF1B\u80FD\u4F7F\u7528 replace \u65F6\u4F18\u5148\u4F7F\u7528 replace\u3002",
+    "\u89C4\u5219\uFF1A\u56F4\u680F\u8BED\u8A00\u5FC5\u987B\u662F notepilot-edit\uFF0C\u4E0D\u5F97\u6539\u7528 json \u6216\u5176\u4ED6\u8BED\u8A00\uFF1Bpath \u4E3A\u76F8\u5BF9\u5E93\u6839\u76EE\u5F55\u7684\u8DEF\u5F84\uFF1BJSON \u5FC5\u987B\u5408\u6CD5\u4E14\u6B63\u786E\u8F6C\u4E49\u6362\u884C\u4E0E\u5F15\u53F7\uFF1B\u6240\u6709\u4FEE\u6539\u90FD\u4F1A\u5148\u5C55\u793A\u7ED9\u7528\u6237\u5BA1\u6279\u540E\u624D\u751F\u6548\uFF0C\u56E0\u6B64\u53EF\u653E\u5FC3\u8F93\u51FA\uFF1B\u80FD\u4F7F\u7528 replace \u65F6\u4F18\u5148\u4F7F\u7528 replace\u3002",
     files.length > 0 ? `\u5F53\u524D\u5E93\u5185\u7684 Markdown \u6587\u4EF6\u5217\u8868\uFF1A
 ${files.join("\n")}` : "\u5F53\u524D\u5E93\u5185\u6682\u65E0 Markdown \u6587\u4EF6\u3002"
   ].join("\n");
 }
 
 // src/chatView.ts
-var VIEW_TYPE_QODER_CHAT = "qoder-chat-view";
-var QoderChatView = class extends import_obsidian2.ItemView {
+var VIEW_TYPE_NOTEPILOT = "notepilot-chat-view";
+var NotePilotView = class extends import_obsidian2.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.state = "chat";
@@ -910,10 +917,10 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.plugin = plugin;
   }
   getViewType() {
-    return VIEW_TYPE_QODER_CHAT;
+    return VIEW_TYPE_NOTEPILOT;
   }
   getDisplayText() {
-    return "Qoder Clone";
+    return "NotePilot";
   }
   getIcon() {
     return "bot";
@@ -930,7 +937,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
   render() {
     const root = this.containerEl.children[1];
     root.empty();
-    root.addClass("qoder-view");
+    root.addClass("notepilot-view");
     if (!this.plugin.isLoggedIn()) {
       this.renderLogin(root);
       return;
@@ -943,18 +950,18 @@ var QoderChatView = class extends import_obsidian2.ItemView {
   }
   // ============ 登录页 ============
   renderLogin(root) {
-    const wrap = root.createDiv({ cls: "qoder-login-wrap" });
-    const card = wrap.createDiv({ cls: "qoder-login-card" });
-    const logo = card.createDiv({ cls: "qoder-logo" });
+    const wrap = root.createDiv({ cls: "notepilot-login-wrap" });
+    const card = wrap.createDiv({ cls: "notepilot-login-card" });
+    const logo = card.createDiv({ cls: "notepilot-logo" });
     (0, import_obsidian2.setIcon)(logo, "bot");
-    card.createEl("div", { cls: "qoder-logo-text", text: "Qoder" });
-    card.createEl("h2", { cls: "qoder-login-title", text: "\u767B\u5F55 Qoder Clone" });
+    card.createEl("div", { cls: "notepilot-logo-text", text: "NotePilot" });
+    card.createEl("h2", { cls: "notepilot-login-title", text: "\u767B\u5F55 NotePilot" });
     card.createEl("p", {
-      cls: "qoder-login-desc",
+      cls: "notepilot-login-desc",
       text: "\u9009\u62E9\u670D\u52A1\u5546\u5E76\u8F93\u5165 API Key \u767B\u5F55\uFF0C\u5BC6\u94A5\u4EC5\u4FDD\u5B58\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
     });
     const providerSelect = card.createEl("select", {
-      cls: "qoder-login-input"
+      cls: "notepilot-login-input"
     });
     for (const [p, preset] of Object.entries(PROVIDER_PRESETS)) {
       const opt = providerSelect.createEl("option", {
@@ -964,24 +971,24 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       if (p === this.plugin.settings.provider) opt.selected = true;
     }
     const keyInput = card.createEl("input", {
-      cls: "qoder-login-input",
+      cls: "notepilot-login-input",
       type: "password",
       attr: { placeholder: "\u8F93\u5165 API Key\uFF08sk-...\uFF09" }
     });
-    const adv = card.createDiv({ cls: "qoder-login-adv" });
+    const adv = card.createDiv({ cls: "notepilot-login-adv" });
     adv.createEl("label", { text: "Base URL" });
     const urlInput = adv.createEl("input", {
-      cls: "qoder-login-input",
+      cls: "notepilot-login-input",
       type: "text",
       value: this.plugin.settings.baseUrl
     });
-    const statusEl = card.createDiv({ cls: "qoder-login-status" });
+    const statusEl = card.createDiv({ cls: "notepilot-login-status" });
     const loginBtn = card.createEl("button", {
-      cls: "qoder-login-btn",
+      cls: "notepilot-login-btn",
       text: "\u767B \u5F55"
     });
     const link = card.createEl("a", {
-      cls: "qoder-login-link",
+      cls: "notepilot-login-link",
       text: "\u83B7\u53D6 API Key \u2192"
     });
     const keyPlaceholders = {
@@ -1036,7 +1043,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       const result = await verifyApiKey(this.plugin.settings);
       loginBtn.disabled = false;
       if (result.ok) {
-        new import_obsidian2.Notice("Qoder Clone \u767B\u5F55\u6210\u529F");
+        new import_obsidian2.Notice("NotePilot \u767B\u5F55\u6210\u529F");
         await this.plugin.saveAll();
         const fetched = await fetchModels(this.plugin.settings);
         this.plugin.availableModels = fetched.ok ? fetched.models : null;
@@ -1055,9 +1062,9 @@ var QoderChatView = class extends import_obsidian2.ItemView {
   }
   // ============ 历史会话列表（参照 Continue History 页） ============
   renderHistory(root) {
-    const header = root.createDiv({ cls: "qoder-header" });
+    const header = root.createDiv({ cls: "notepilot-header" });
     const backBtn = header.createEl("button", {
-      cls: "qoder-icon-btn",
+      cls: "notepilot-icon-btn",
       attr: { title: "\u8FD4\u56DE\u804A\u5929" }
     });
     (0, import_obsidian2.setIcon)(backBtn, "arrow-left");
@@ -1065,10 +1072,10 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       this.state = "chat";
       this.render();
     });
-    header.createDiv({ cls: "qoder-header-title", text: "\u5386\u53F2\u4F1A\u8BDD" });
-    header.createDiv({ cls: "qoder-toolbar-spacer" });
+    header.createDiv({ cls: "notepilot-header-title", text: "\u5386\u53F2\u4F1A\u8BDD" });
+    header.createDiv({ cls: "notepilot-toolbar-spacer" });
     const newBtn = header.createEl("button", {
-      cls: "qoder-icon-btn",
+      cls: "notepilot-icon-btn",
       attr: { title: "\u65B0\u5BF9\u8BDD" }
     });
     (0, import_obsidian2.setIcon)(newBtn, "square-plus");
@@ -1077,34 +1084,34 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       this.state = "chat";
       this.render();
     });
-    const list = root.createDiv({ cls: "qoder-history-list" });
+    const list = root.createDiv({ cls: "notepilot-history-list" });
     const sessions = [...this.plugin.sessions].sort(
       (a, b) => b.updatedAt - a.updatedAt
     );
     if (sessions.length === 0) {
-      list.createDiv({ cls: "qoder-chat-empty", text: "\u6682\u65E0\u4F1A\u8BDD" });
+      list.createDiv({ cls: "notepilot-chat-empty", text: "\u6682\u65E0\u4F1A\u8BDD" });
       return;
     }
     for (const s of sessions) {
-      const row = list.createDiv({ cls: "qoder-history-row" });
+      const row = list.createDiv({ cls: "notepilot-history-row" });
       if (s.id === this.plugin.currentSessionId) {
-        row.addClass("qoder-history-row-active");
+        row.addClass("notepilot-history-row-active");
       }
-      const body = row.createDiv({ cls: "qoder-history-body" });
-      const titleRow = body.createDiv({ cls: "qoder-history-title-row" });
+      const body = row.createDiv({ cls: "notepilot-history-body" });
+      const titleRow = body.createDiv({ cls: "notepilot-history-title-row" });
       const titleEl = titleRow.createSpan({
-        cls: "qoder-history-title",
+        cls: "notepilot-history-title",
         text: s.title
       });
       const count = s.messages.filter((m) => m.role !== "error").length;
-      titleRow.createSpan({ cls: "qoder-history-count", text: String(count) });
+      titleRow.createSpan({ cls: "notepilot-history-count", text: String(count) });
       body.createDiv({
-        cls: "qoder-history-date",
+        cls: "notepilot-history-date",
         text: formatDate(s.updatedAt)
       });
-      const actions = row.createDiv({ cls: "qoder-history-actions" });
+      const actions = row.createDiv({ cls: "notepilot-history-actions" });
       const editBtn = actions.createEl("button", {
-        cls: "qoder-icon-btn",
+        cls: "notepilot-icon-btn",
         attr: { title: "\u91CD\u547D\u540D" }
       });
       (0, import_obsidian2.setIcon)(editBtn, "pencil");
@@ -1113,7 +1120,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
         this.startRename(row, titleEl, s.id);
       });
       const exportBtn = actions.createEl("button", {
-        cls: "qoder-icon-btn",
+        cls: "notepilot-icon-btn",
         attr: { title: "\u5BFC\u51FA\u4E3A Markdown" }
       });
       (0, import_obsidian2.setIcon)(exportBtn, "download");
@@ -1122,7 +1129,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
         await this.exportSession(s.id);
       });
       const delBtn = actions.createEl("button", {
-        cls: "qoder-icon-btn qoder-icon-btn-danger",
+        cls: "notepilot-icon-btn notepilot-icon-btn-danger",
         attr: { title: "\u5220\u9664" }
       });
       (0, import_obsidian2.setIcon)(delBtn, "trash-2");
@@ -1146,7 +1153,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     const input = document.createElement("input");
     input.type = "text";
     input.value = session.title;
-    input.addClass("qoder-history-rename");
+    input.addClass("notepilot-history-rename");
     titleEl.replaceWith(input);
     input.focus();
     input.select();
@@ -1166,10 +1173,10 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     const session = this.plugin.sessions.find((x) => x.id === id);
     if (!session) return;
     const safe = session.title.replace(/[\\/:*?"<>|#^\[\]]/g, "").slice(0, 40);
-    let path = `Qoder Clone ${safe}.md`;
+    let path = `NotePilot ${safe}.md`;
     let n = 1;
     while (this.app.vault.getAbstractFileByPath(path)) {
-      path = `Qoder Clone ${safe} ${n++}.md`;
+      path = `NotePilot ${safe} ${n++}.md`;
     }
     const file = await this.app.vault.create(path, sessionToMarkdown(session));
     new import_obsidian2.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
@@ -1178,13 +1185,13 @@ var QoderChatView = class extends import_obsidian2.ItemView {
   }
   // ============ 聊天页 ============
   renderChat(root) {
-    const header = root.createDiv({ cls: "qoder-header" });
-    const title = header.createDiv({ cls: "qoder-header-title" });
+    const header = root.createDiv({ cls: "notepilot-header" });
+    const title = header.createDiv({ cls: "notepilot-header-title" });
     (0, import_obsidian2.setIcon)(title, "bot");
-    title.createSpan({ text: "Qoder Clone" });
-    header.createDiv({ cls: "qoder-toolbar-spacer" });
+    title.createSpan({ text: "NotePilot" });
+    header.createDiv({ cls: "notepilot-toolbar-spacer" });
     const historyBtn = header.createEl("button", {
-      cls: "qoder-icon-btn",
+      cls: "notepilot-icon-btn",
       attr: { title: "\u5386\u53F2\u4F1A\u8BDD" }
     });
     (0, import_obsidian2.setIcon)(historyBtn, "history");
@@ -1193,7 +1200,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       this.render();
     });
     const newBtn = header.createEl("button", {
-      cls: "qoder-icon-btn",
+      cls: "notepilot-icon-btn",
       attr: { title: "\u65B0\u5BF9\u8BDD" }
     });
     (0, import_obsidian2.setIcon)(newBtn, "square-plus");
@@ -1203,22 +1210,22 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       this.render();
     });
     const logoutBtn = header.createEl("button", {
-      cls: "qoder-icon-btn",
+      cls: "notepilot-icon-btn",
       attr: { title: "\u9000\u51FA\u767B\u5F55" }
     });
     (0, import_obsidian2.setIcon)(logoutBtn, "log-out");
     logoutBtn.addEventListener("click", () => this.logout());
-    this.messagesEl = root.createDiv({ cls: "qoder-chat-messages" });
+    this.messagesEl = root.createDiv({ cls: "notepilot-chat-messages" });
     this.renderMessages();
     if (this.quotedText === null && this.plugin.pendingQuotedText) {
       this.quotedText = this.plugin.pendingQuotedText;
       this.plugin.pendingQuotedText = null;
     }
-    this.chipsEl = root.createDiv({ cls: "qoder-chips" });
+    this.chipsEl = root.createDiv({ cls: "notepilot-chips" });
     this.renderChips();
-    const inputBox = root.createDiv({ cls: "qoder-input-box" });
+    const inputBox = root.createDiv({ cls: "notepilot-input-box" });
     this.inputEl = inputBox.createEl("textarea", {
-      cls: "qoder-chat-input",
+      cls: "notepilot-chat-input",
       attr: {
         placeholder: "\u63D0\u95EE\u2026\uFF08@ \u5F15\u7528\u7B14\u8BB0\uFF0C\u62D6\u5165\u6587\u4EF6\u9644\u52A0\uFF0CEnter \u53D1\u9001\uFF09",
         rows: "2"
@@ -1227,18 +1234,18 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.registerDomEvent(inputBox, "dragover", (evt) => {
       evt.preventDefault();
       if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
-      inputBox.addClass("qoder-dragover");
+      inputBox.addClass("notepilot-dragover");
     });
     this.registerDomEvent(inputBox, "dragleave", () => {
-      inputBox.removeClass("qoder-dragover");
+      inputBox.removeClass("notepilot-dragover");
     });
     this.registerDomEvent(inputBox, "drop", (evt) => {
-      inputBox.removeClass("qoder-dragover");
+      inputBox.removeClass("notepilot-dragover");
       void this.onDropFiles(evt);
     });
-    const toolbar = inputBox.createDiv({ cls: "qoder-input-toolbar" });
+    const toolbar = inputBox.createDiv({ cls: "notepilot-input-toolbar" });
     const modelSelect = toolbar.createEl("select", {
-      cls: "qoder-model-select"
+      cls: "notepilot-model-select"
     });
     const presetModels = PROVIDER_MODELS[this.plugin.settings.provider];
     const fetched = this.plugin.availableModels;
@@ -1259,7 +1266,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       this.plugin.updateStatusBar();
     });
     const refreshModelsBtn = toolbar.createEl("button", {
-      cls: "qoder-icon-btn",
+      cls: "notepilot-icon-btn",
       attr: { title: "\u4ECE API \u62C9\u53D6\u53EF\u7528\u6A21\u578B\u5217\u8868" }
     });
     (0, import_obsidian2.setIcon)(refreshModelsBtn, "refresh-cw");
@@ -1268,17 +1275,17 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     });
     if (this.plugin.settings.includeActiveNote) {
       const badge = toolbar.createDiv({
-        cls: "qoder-ctx-badge",
+        cls: "notepilot-ctx-badge",
         text: "\u{1F4C4} \u5F53\u524D\u7B14\u8BB0"
       });
       badge.setAttribute("title", "\u63D0\u95EE\u65F6\u5C06\u9644\u5E26\u5F53\u524D\u7B14\u8BB0\u5185\u5BB9");
     }
     const agentBtn = toolbar.createEl("button", {
-      cls: "qoder-mode-btn",
+      cls: "notepilot-mode-btn",
       text: "\u26A1 Agent"
     });
     agentBtn.setAttribute("title", "Agent \u6A21\u5F0F\uFF1AAI \u53EF\u5EFA\u8BAE\u521B\u5EFA/\u4FEE\u6539\u5E93\u5185\u6587\u4EF6\uFF08\u9700\u4F60\u5BA1\u6279\uFF09");
-    const syncAgentBtn = () => agentBtn.toggleClass("qoder-mode-on", this.plugin.settings.agentMode);
+    const syncAgentBtn = () => agentBtn.toggleClass("notepilot-mode-on", this.plugin.settings.agentMode);
     syncAgentBtn();
     agentBtn.addEventListener("click", () => {
       this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
@@ -1288,14 +1295,14 @@ var QoderChatView = class extends import_obsidian2.ItemView {
         this.plugin.settings.agentMode ? "Agent \u6A21\u5F0F\u5DF2\u5F00\u542F\uFF1AAI \u53EF\u63D0\u51FA\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE" : "Agent \u6A21\u5F0F\u5DF2\u5173\u95ED"
       );
     });
-    toolbar.createDiv({ cls: "qoder-toolbar-spacer" });
+    toolbar.createDiv({ cls: "notepilot-toolbar-spacer" });
     this.stopBtn = toolbar.createEl("button", {
-      cls: "qoder-chat-stop",
+      cls: "notepilot-chat-stop",
       text: "\u505C\u6B62"
     });
     this.stopBtn.style.display = "none";
     this.stopBtn.addEventListener("click", () => this.stop());
-    this.sendBtn = toolbar.createEl("button", { cls: "qoder-chat-send" });
+    this.sendBtn = toolbar.createEl("button", { cls: "notepilot-chat-send" });
     (0, import_obsidian2.setIcon)(this.sendBtn, "arrow-up");
     this.sendBtn.setAttribute("aria-label", "\u53D1\u9001");
     this.sendBtn.addEventListener("click", () => void this.send());
@@ -1316,23 +1323,23 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.scrollToBottom();
   }
   renderWelcome() {
-    const w = this.messagesEl.createDiv({ cls: "qoder-welcome" });
-    w.createDiv({ cls: "qoder-welcome-hi", text: "\u4F60\u597D \u{1F44B}" });
+    const w = this.messagesEl.createDiv({ cls: "notepilot-welcome" });
+    w.createDiv({ cls: "notepilot-welcome-hi", text: "\u4F60\u597D \u{1F44B}" });
     w.createDiv({
-      cls: "qoder-welcome-sub",
-      text: "\u6211\u662F Qoder Clone\uFF0C\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002\u8F93\u5165 @ \u53EF\u5F15\u7528\u5E93\u5185\u7B14\u8BB0\u3002"
+      cls: "notepilot-welcome-sub",
+      text: "\u6211\u662F NotePilot\uFF0C\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002\u8F93\u5165 @ \u53EF\u5F15\u7528\u5E93\u5185\u7B14\u8BB0\u3002"
     });
-    const grid = w.createDiv({ cls: "qoder-suggestions" });
+    const grid = w.createDiv({ cls: "notepilot-suggestions" });
     for (const s of SUGGESTIONS) {
       const btn = grid.createEl("button", {
-        cls: "qoder-suggestion-btn",
+        cls: "notepilot-suggestion-btn",
         text: s.title
       });
       btn.addEventListener("click", () => void this.sendText(s.prompt));
     }
   }
   appendMessageEl(msg) {
-    const cls = msg.role === "user" ? "qoder-msg qoder-msg-user" : msg.role === "error" ? "qoder-msg qoder-msg-system-err" : "qoder-msg qoder-msg-assistant";
+    const cls = msg.role === "user" ? "notepilot-msg notepilot-msg-user" : msg.role === "error" ? "notepilot-msg notepilot-msg-system-err" : "notepilot-msg notepilot-msg-assistant";
     const el = this.messagesEl.createDiv({ cls });
     if (msg.role === "user" || msg.role === "error") {
       el.setText(msg.content);
@@ -1347,9 +1354,9 @@ var QoderChatView = class extends import_obsidian2.ItemView {
   /** 为代码块添加 复制 / 插入笔记 按钮（参照 Continue 代码块操作） */
   addCodeActions(el) {
     el.querySelectorAll("pre").forEach((pre) => {
-      if (pre.querySelector(".qoder-code-actions")) return;
+      if (pre.querySelector(".notepilot-code-actions")) return;
       const bar = document.createElement("div");
-      bar.addClass("qoder-code-actions");
+      bar.addClass("notepilot-code-actions");
       const copyBtn = bar.createEl("button", { text: "\u590D\u5236" });
       copyBtn.addEventListener("click", () => {
         var _a;
@@ -1386,7 +1393,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       var _a, _b, _c;
       let t = ((_c = (_b = (_a = pre.querySelector("code")) == null ? void 0 : _a.textContent) != null ? _b : pre.textContent) != null ? _c : "").trim();
       const firstLine = t.split("\n", 1)[0].trim();
-      if (/^qoder[-_ ]?edit$/i.test(firstLine)) {
+      if (/^(notepilot|qoder)[-_ ]?edit$/i.test(firstLine)) {
         t = t.slice(firstLine.length).trim();
       }
       if (raws.has(t)) pre.remove();
@@ -1398,38 +1405,38 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     if (parsed.length > 0) {
       this.stripRenderedEditBlocks(container, parsed);
     }
-    if (parsed.length === 0 || container.querySelector(".qoder-edit-cards")) {
+    if (parsed.length === 0 || container.querySelector(".notepilot-edit-cards")) {
       return;
     }
-    const wrap = container.createDiv({ cls: "qoder-edit-cards" });
+    const wrap = container.createDiv({ cls: "notepilot-edit-cards" });
     wrap.createDiv({
-      cls: "qoder-edit-cards-title",
+      cls: "notepilot-edit-cards-title",
       text: `\u{1F4DD} \u68C0\u6D4B\u5230 ${parsed.length} \u9879\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE\uFF0C\u786E\u8BA4\u540E\u751F\u6548`
     });
     for (const p of parsed) {
-      const card = wrap.createDiv({ cls: "qoder-edit-card" });
+      const card = wrap.createDiv({ cls: "notepilot-edit-card" });
       if (!p.edit) {
         card.createDiv({
-          cls: "qoder-edit-path",
+          cls: "notepilot-edit-path",
           text: `\u26A0\uFE0F \u7F16\u8F91\u5757\u89E3\u6790\u5931\u8D25\uFF1A${(_a = p.error) != null ? _a : "\u672A\u77E5\u9519\u8BEF"}`
         });
-        card.createEl("pre", { cls: "qoder-edit-raw", text: p.raw });
+        card.createEl("pre", { cls: "notepilot-edit-raw", text: p.raw });
         continue;
       }
       const edit = p.edit;
-      const head = card.createDiv({ cls: "qoder-edit-head" });
+      const head = card.createDiv({ cls: "notepilot-edit-head" });
       head.createSpan({
-        cls: `qoder-edit-action qoder-edit-action-${edit.action}`,
+        cls: `notepilot-edit-action notepilot-edit-action-${edit.action}`,
         text: edit.action === "replace" ? "\u66FF\u6362" : edit.action === "create" ? "\u65B0\u5EFA" : "\u8986\u5199"
       });
-      head.createSpan({ cls: "qoder-edit-path", text: edit.path });
-      const diffEl = card.createDiv({ cls: "qoder-edit-diff" });
+      head.createSpan({ cls: "notepilot-edit-path", text: edit.path });
+      const diffEl = card.createDiv({ cls: "notepilot-edit-diff" });
       const addDiffLine = (type, lineText) => {
         const row = diffEl.createDiv({
-          cls: `qoder-diff-line qoder-diff-${type}`
+          cls: `notepilot-diff-line notepilot-diff-${type}`
         });
         row.createSpan({
-          cls: "qoder-diff-mark",
+          cls: "notepilot-diff-mark",
           text: type === "add" ? "+" : type === "del" ? "\u2212" : " "
         });
         row.createSpan({ text: lineText || " " });
@@ -1443,13 +1450,13 @@ var QoderChatView = class extends import_obsidian2.ItemView {
         for (const l of allLines.slice(0, 12)) addDiffLine("add", l);
         if (allLines.length > 12) {
           diffEl.createDiv({
-            cls: "qoder-diff-line",
+            cls: "notepilot-diff-line",
             text: `\u2026\uFF08\u5171 ${allLines.length} \u884C\uFF09`
           });
         }
       }
-      const btnRow = card.createDiv({ cls: "qoder-edit-btns" });
-      const status = btnRow.createSpan({ cls: "qoder-edit-status" });
+      const btnRow = card.createDiv({ cls: "notepilot-edit-btns" });
+      const status = btnRow.createSpan({ cls: "notepilot-edit-status" });
       const reject = btnRow.createEl("button", { text: "\u62D2\u7EDD" });
       const apply = btnRow.createEl("button", {
         text: "\u5E94\u7528",
@@ -1561,21 +1568,21 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.popupIndex = 0;
     if (!this.popupEl) {
       const root = this.containerEl.children[1];
-      this.popupEl = root.createDiv({ cls: "qoder-at-popup" });
+      this.popupEl = root.createDiv({ cls: "notepilot-at-popup" });
     }
     this.popupEl.empty();
     if (files.length === 0) {
       this.popupEl.createDiv({
-        cls: "qoder-at-item qoder-at-empty",
+        cls: "notepilot-at-item notepilot-at-empty",
         text: "\u6CA1\u6709\u5339\u914D\u7684\u7B14\u8BB0"
       });
       return;
     }
     files.forEach((f, idx) => {
-      const item = this.popupEl.createDiv({ cls: "qoder-at-item" });
-      item.createSpan({ cls: "qoder-at-name", text: f.basename });
-      item.createSpan({ cls: "qoder-at-path", text: f.path });
-      if (idx === this.popupIndex) item.addClass("qoder-at-active");
+      const item = this.popupEl.createDiv({ cls: "notepilot-at-item" });
+      item.createSpan({ cls: "notepilot-at-name", text: f.basename });
+      item.createSpan({ cls: "notepilot-at-path", text: f.path });
+      if (idx === this.popupIndex) item.addClass("notepilot-at-active");
       item.addEventListener("mousedown", (e) => {
         e.preventDefault();
         this.selectAtFile(f);
@@ -1584,8 +1591,8 @@ var QoderChatView = class extends import_obsidian2.ItemView {
   }
   highlightPopup() {
     if (!this.popupEl) return;
-    this.popupEl.querySelectorAll(".qoder-at-item").forEach((el, idx) => {
-      el.toggleClass("qoder-at-active", idx === this.popupIndex);
+    this.popupEl.querySelectorAll(".notepilot-at-item").forEach((el, idx) => {
+      el.toggleClass("notepilot-at-active", idx === this.popupIndex);
     });
   }
   hideAtPopup() {
@@ -1624,29 +1631,29 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.chipsEl.style.display = "";
     if (this.quotedText !== null) {
       const q = this.quotedText;
-      const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+      const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
       chip.createSpan({ text: `\u{1F4CB} \u5212\u8BCD\u9009\u4E2D\uFF08${q.length} \u5B57\uFF09` });
       chip.setAttribute("title", q.slice(0, 200));
-      const x = chip.createSpan({ cls: "qoder-chip-x", text: "\xD7" });
+      const x = chip.createSpan({ cls: "notepilot-chip-x", text: "\xD7" });
       x.addEventListener("click", () => {
         this.quotedText = null;
         this.renderChips();
       });
     }
     for (const ef of this.externalFiles) {
-      const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+      const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
       chip.createSpan({ text: `\u{1F4CE} ${ef.name}` });
-      const x = chip.createSpan({ cls: "qoder-chip-x", text: "\xD7" });
+      const x = chip.createSpan({ cls: "notepilot-chip-x", text: "\xD7" });
       x.addEventListener("click", () => {
         this.externalFiles = this.externalFiles.filter((f) => f !== ef);
         this.renderChips();
       });
     }
     for (const path of this.attachedFiles) {
-      const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+      const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
       const name = (_b = (_a = path.split("/").pop()) == null ? void 0 : _a.replace(/\.md$/, "")) != null ? _b : path;
       chip.createSpan({ text: `\u{1F4C4} ${name}` });
-      const x = chip.createSpan({ cls: "qoder-chip-x", text: "\xD7" });
+      const x = chip.createSpan({ cls: "notepilot-chip-x", text: "\xD7" });
       x.addEventListener("click", () => {
         this.attachedFiles = this.attachedFiles.filter((p) => p !== path);
         this.renderChips();
@@ -1812,7 +1819,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.renderMessages();
     const assistantEl = this.messagesEl.lastElementChild;
     assistantEl.empty();
-    assistantEl.createSpan({ cls: "qoder-thinking", text: "\u601D\u8003\u4E2D\u2026" });
+    assistantEl.createSpan({ cls: "notepilot-thinking", text: "\u601D\u8003\u4E2D\u2026" });
     this.setBusy(true);
     const requestMessages = await this.buildRequestMessages(
       attached,
@@ -1840,7 +1847,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
         onError: (message) => {
           assistantMsg.role = "error";
           assistantMsg.content = message;
-          assistantEl.className = "qoder-msg qoder-msg-system-err";
+          assistantEl.className = "notepilot-msg notepilot-msg-system-err";
           assistantEl.setText(message);
           new import_obsidian2.Notice(message);
         }
@@ -1965,7 +1972,7 @@ function selectionAutoQuoteExtension(plugin) {
     }
   );
 }
-var QoderChatPlugin = class extends import_obsidian3.Plugin {
+var NotePilotPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -2018,22 +2025,22 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
   async onload() {
     await this.loadAll();
     this.registerView(
-      VIEW_TYPE_QODER_CHAT,
-      (leaf) => new QoderChatView(leaf, this)
+      VIEW_TYPE_NOTEPILOT,
+      (leaf) => new NotePilotView(leaf, this)
     );
     this.statusBarEl = this.addStatusBarItem();
     this.updateStatusBar();
-    this.addRibbonIcon("bot", "\u6253\u5F00 Qoder Clone", () => {
+    this.addRibbonIcon("bot", "\u6253\u5F00 NotePilot", () => {
       void this.activateView();
     });
     this.addCommand({
-      id: "open-qoder-chat",
-      name: "\u6253\u5F00 Qoder Clone \u9762\u677F",
+      id: "open-notepilot",
+      name: "\u6253\u5F00 NotePilot \u9762\u677F",
       callback: () => void this.activateView()
     });
     this.addCommand({
-      id: "new-qoder-chat",
-      name: "\u65B0\u5EFA Qoder Clone \u5BF9\u8BDD",
+      id: "new-notepilot-chat",
+      name: "\u65B0\u5EFA NotePilot \u5BF9\u8BDD",
       callback: () => {
         this.newSession();
         this.refreshView();
@@ -2061,46 +2068,46 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
         const sel = editor.getSelection();
         if (!sel.trim()) return;
         menu.addItem((item) => {
-          item.setTitle("Qoder Clone\uFF1A\u5212\u8BCD\u63D0\u95EE").setIcon("quote").onClick(() => void this.askSelection(sel));
+          item.setTitle("NotePilot\uFF1A\u5212\u8BCD\u63D0\u95EE").setIcon("quote").onClick(() => void this.askSelection(sel));
         });
       })
     );
     this.addCommand({
-      id: "logout-qoder-chat",
-      name: "\u9000\u51FA Qoder Clone \u767B\u5F55",
+      id: "logout-notepilot-chat",
+      name: "\u9000\u51FA NotePilot \u767B\u5F55",
       callback: () => {
         this.settings.apiKey = "";
         void this.saveAll();
         this.updateStatusBar();
         this.refreshView();
-        new import_obsidian3.Notice("\u5DF2\u9000\u51FA Qoder Clone \u767B\u5F55");
+        new import_obsidian3.Notice("\u5DF2\u9000\u51FA NotePilot \u767B\u5F55");
       }
     });
-    this.addSettingTab(new QoderChatSettingTab(this.app, this));
+    this.addSettingTab(new NotePilotSettingTab(this.app, this));
     this.registerEditorExtension(selectionAutoQuoteExtension(this));
   }
   updateStatusBar() {
     if (!this.statusBarEl) return;
     if (this.isLoggedIn()) {
       this.statusBarEl.setText(
-        `Qoder \xB7 \u5DF2\u767B\u5F55 \xB7 ${this.settings.model}`
+        `NotePilot \xB7 \u5DF2\u767B\u5F55 \xB7 ${this.settings.model}`
       );
     } else {
-      this.statusBarEl.setText("Qoder \xB7 \u672A\u767B\u5F55");
+      this.statusBarEl.setText("NotePilot \xB7 \u672A\u767B\u5F55");
     }
   }
   onunload() {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_QODER_CHAT);
+    this.app.workspace.detachLeavesOfType(VIEW_TYPE_NOTEPILOT);
   }
   async activateView() {
     var _a;
     const { workspace } = this.app;
-    let leaf = workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+    let leaf = workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
     if (!leaf) {
       leaf = (_a = workspace.getRightLeaf(false)) != null ? _a : void 0;
       if (leaf) {
         await leaf.setViewState({
-          type: VIEW_TYPE_QODER_CHAT,
+          type: VIEW_TYPE_NOTEPILOT,
           active: true
         });
       }
@@ -2110,19 +2117,19 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
   /** 划词提问：打开面板并将选中文本引用到输入框 */
   async askSelection(text) {
     await this.activateView();
-    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
     const view = leaf == null ? void 0 : leaf.view;
     view == null ? void 0 : view.attachQuotedText(text);
   }
   /** 自动识别划词：记录选区文本并同步到已打开的面板（不抢焦点、不提示） */
   autoQuoteSelection(text) {
     this.pendingQuotedText = text;
-    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
     const view = leaf == null ? void 0 : leaf.view;
     view == null ? void 0 : view.attachQuotedText(text, true);
   }
   refreshView() {
-    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
     const view = leaf == null ? void 0 : leaf.view;
     view == null ? void 0 : view.refresh();
   }
@@ -2170,7 +2177,7 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
   /** Inline Chat：选中文本 → 指令 → AI 改写 → Diff 预览 → 应用 */
   async inlineChat(editor, view) {
     if (!this.isLoggedIn()) {
-      new import_obsidian3.Notice("\u8BF7\u5148\u767B\u5F55 Qoder Clone");
+      new import_obsidian3.Notice("\u8BF7\u5148\u767B\u5F55 NotePilot");
       return;
     }
     const sel = editor.getSelection();
@@ -2180,7 +2187,7 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
     }
     const instruction = await new InstructionModal(this.app).openAndWait();
     if (instruction === null) return;
-    new import_obsidian3.Notice("Qoder Clone \u6B63\u5728\u6539\u5199\u2026");
+    new import_obsidian3.Notice("NotePilot \u6B63\u5728\u6539\u5199\u2026");
     let result;
     try {
       result = await this.complete([
@@ -2233,16 +2240,16 @@ var InstructionModal = class extends import_obsidian3.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass("qoder-modal");
+    contentEl.addClass("notepilot-modal");
     contentEl.createEl("h3", { text: "Inline Chat\uFF1A\u5982\u4F55\u6539\u5199\u9009\u4E2D\u6587\u672C\uFF1F" });
     const input = contentEl.createEl("textarea", {
-      cls: "qoder-modal-input",
+      cls: "notepilot-modal-input",
       attr: {
         placeholder: "\u4F8B\u5982\uFF1A\u6DA6\u8272\u8BED\u8A00 / \u7FFB\u8BD1\u6210\u82F1\u6587 / \u7CBE\u7B80\u4E3A 3 \u53E5\u8BDD\u2026",
         rows: "3"
       }
     });
-    const row = contentEl.createDiv({ cls: "qoder-modal-row" });
+    const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
     const cancel = row.createEl("button", { text: "\u53D6\u6D88" });
     const ok = row.createEl("button", {
       text: "\u6539\u5199",
@@ -2292,16 +2299,16 @@ var DiffModal = class extends import_obsidian3.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass("qoder-modal");
+    contentEl.addClass("notepilot-modal");
     contentEl.createEl("h3", { text: "\u6539\u52A8\u9884\u89C8\uFF08Diff\uFF09" });
-    const diffEl = contentEl.createDiv({ cls: "qoder-diff" });
+    const diffEl = contentEl.createDiv({ cls: "notepilot-diff" });
     for (const line of lineDiff(this.oldText, this.newText)) {
-      const row2 = diffEl.createDiv({ cls: `qoder-diff-line qoder-diff-${line.type}` });
+      const row2 = diffEl.createDiv({ cls: `notepilot-diff-line notepilot-diff-${line.type}` });
       const mark = line.type === "add" ? "+" : line.type === "del" ? "\u2212" : " ";
-      row2.createSpan({ cls: "qoder-diff-mark", text: mark });
+      row2.createSpan({ cls: "notepilot-diff-mark", text: mark });
       row2.createSpan({ text: line.text || " " });
     }
-    const row = contentEl.createDiv({ cls: "qoder-modal-row" });
+    const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
     const reject = row.createEl("button", { text: "\u62D2\u7EDD" });
     const accept = row.createEl("button", {
       text: "\u63A5\u53D7\u6539\u52A8",
@@ -2323,7 +2330,7 @@ var DiffModal = class extends import_obsidian3.Modal {
     this.contentEl.empty();
   }
 };
-var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
+var NotePilotSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -2331,7 +2338,7 @@ var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Qoder Clone \u8BBE\u7F6E" });
+    containerEl.createEl("h2", { text: "NotePilot \u8BBE\u7F6E" });
     new import_obsidian3.Setting(containerEl).setName("\u767B\u5F55\u72B6\u6001").setDesc(
       this.plugin.isLoggedIn() ? `\u5DF2\u767B\u5F55\uFF08\u6A21\u578B\uFF1A${this.plugin.settings.model}\uFF09` : "\u672A\u767B\u5F55\uFF0C\u8BF7\u5728\u804A\u5929\u9762\u677F\u767B\u5F55\u9875\u8F93\u5165\u51ED\u8BC1"
     );
@@ -2386,7 +2393,7 @@ var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveAll();
       });
     });
-    new import_obsidian3.Setting(containerEl).setName("\u542F\u7528 Rules \u89C4\u5219\u6587\u4EF6").setDesc(`\u8BFB\u53D6\u5E93\u6839\u76EE\u5F55 .qoder-rules/*.md \u4E2D\u7684\u89C4\u5219\uFF0C\u81EA\u52A8\u6CE8\u5165\u5BF9\u8BDD\uFF08\u53C2\u7167 Continue \u7684 rules \u673A\u5236\uFF09`).addToggle(
+    new import_obsidian3.Setting(containerEl).setName("\u542F\u7528 Rules \u89C4\u5219\u6587\u4EF6").setDesc(`\u8BFB\u53D6\u5E93\u6839\u76EE\u5F55 .notepilot-rules/*.md \u4E2D\u7684\u89C4\u5219\uFF0C\u81EA\u52A8\u6CE8\u5165\u5BF9\u8BDD\uFF08\u53C2\u7167 Continue \u7684 rules \u673A\u5236\uFF09`).addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.rulesEnabled).onChange(async (value) => {
         this.plugin.settings.rulesEnabled = value;
         await this.plugin.saveAll();
@@ -2420,8 +2427,8 @@ var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     containerEl.createEl("p", {
-      cls: "qoder-settings-notice",
-      text: "\u8BF4\u660E\uFF1A\u672C\u63D2\u4EF6\u4E3A\u4EFF Qoder \u7684\u72EC\u7ACB\u5B9E\u73B0\uFF0C\u754C\u9762\u4E0E\u4EA4\u4E92\u53C2\u7167\u5F00\u6E90\u9879\u76EE Continue\uFF08Apache 2.0\uFF09\u3002BYOK \u6A21\u5F0F\u9700\u8981\u4F60\u81EA\u5DF1\u63D0\u4F9B\u5927\u6A21\u578B API\uFF0C\u5BC6\u94A5\u4EC5\u5B58\u50A8\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
+      cls: "notepilot-settings-notice",
+      text: "\u8BF4\u660E\uFF1A\u672C\u63D2\u4EF6\u4E3A\u4EFF NotePilot \u7684\u72EC\u7ACB\u5B9E\u73B0\uFF0C\u754C\u9762\u4E0E\u4EA4\u4E92\u53C2\u7167\u5F00\u6E90\u9879\u76EE Continue\uFF08Apache 2.0\uFF09\u3002BYOK \u6A21\u5F0F\u9700\u8981\u4F60\u81EA\u5DF1\u63D0\u4F9B\u5927\u6A21\u578B API\uFF0C\u5BC6\u94A5\u4EC5\u5B58\u50A8\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
     });
   }
   hide() {

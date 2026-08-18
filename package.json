@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-qoder-chat",
+	"name": "obsidian-notepilot",
 	"version": "1.0.0",
-	"description": "Qoder-style AI chat plugin for Obsidian (BYOK, streaming).",
+	"description": "NotePilot-style AI chat plugin for Obsidian (BYOK, streaming).",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

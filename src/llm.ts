@@ -1,7 +1,7 @@
-// Qoder Chat —— 多协议大模型客户端
+// NotePilot —— 多协议大模型客户端
 // 支持 OpenAI 兼容 / Anthropic 原生 / Gemini 原生三种协议，均支持流式 SSE
 
-import { ApiFormat, PROVIDER_PRESETS, QoderChatSettings } from "./settings";
+import { ApiFormat, PROVIDER_PRESETS, NotePilotSettings } from "./settings";
 
 export interface LlmRequestMessage {
 	role: "system" | "user" | "assistant";
@@ -14,7 +14,7 @@ export interface LlmCallbacks {
 }
 
 /** 当前服务商使用的协议格式 */
-export function apiFormatOf(settings: QoderChatSettings): ApiFormat {
+export function apiFormatOf(settings: NotePilotSettings): ApiFormat {
 	return PROVIDER_PRESETS[settings.provider].format;
 }
 
@@ -24,7 +24,7 @@ export function apiFormatOf(settings: QoderChatSettings): ApiFormat {
  * 登录验证：按协议格式分发，校验 API Key 是否有效。
  */
 export async function verifyApiKey(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<{ ok: boolean; message: string }> {
 	switch (apiFormatOf(settings)) {
 		case "anthropic":
@@ -38,7 +38,7 @@ export async function verifyApiKey(
 
 /** OpenAI 兼容协议：优先 /models 接口，不存在则回退为最小对话请求 */
 async function verifyOpenAI(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<{ ok: boolean; message: string }> {
 	const base = settings.baseUrl.replace(/\/+$/, "");
 	const headers = {
@@ -92,7 +92,7 @@ async function verifyOpenAI(
 
 /** Anthropic 原生协议：GET /v1/models，x-api-key 认证 */
 async function verifyAnthropic(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<{ ok: boolean; message: string }> {
 	const base = settings.baseUrl.replace(/\/+$/, "");
 	const headers = {
@@ -121,7 +121,7 @@ async function verifyAnthropic(
 
 /** Gemini 原生协议：GET /v1beta/models?key=... */
 async function verifyGemini(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<{ ok: boolean; message: string }> {
 	const base = settings.baseUrl.replace(/\/+$/, "");
 	try {
@@ -155,7 +155,7 @@ export interface FetchModelsResult {
 
 /** 从 API 拉取当前服务商的可用模型列表（按协议格式分发） */
 export async function fetchModels(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<FetchModelsResult> {
 	switch (apiFormatOf(settings)) {
 		case "anthropic":
@@ -183,7 +183,7 @@ const NON_CHAT_KEYWORDS = [
 
 /** OpenAI 兼容协议：GET /models → data[].id，过滤非对话模型 */
 async function fetchOpenAIModels(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<FetchModelsResult> {
 	const base = settings.baseUrl.replace(/\/+$/, "");
 	try {
@@ -210,7 +210,7 @@ async function fetchOpenAIModels(
 
 /** Anthropic 原生协议：GET /v1/models → data[].id */
 async function fetchAnthropicModels(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<FetchModelsResult> {
 	const base = settings.baseUrl.replace(/\/+$/, "");
 	try {
@@ -237,7 +237,7 @@ async function fetchAnthropicModels(
 
 /** Gemini 原生协议：GET /v1beta/models → models[].name（去 models/ 前缀），仅保留支持 generateContent 的 */
 async function fetchGeminiModels(
-	settings: QoderChatSettings
+	settings: NotePilotSettings
 ): Promise<FetchModelsResult> {
 	const base = settings.baseUrl.replace(/\/+$/, "");
 	try {
@@ -267,7 +267,7 @@ async function fetchGeminiModels(
 // ============ 对话调用（统一入口，按协议分发） ============
 
 export function chatCompletion(
-	settings: QoderChatSettings,
+	settings: NotePilotSettings,
 	messages: LlmRequestMessage[],
 	callbacks: LlmCallbacks,
 	onDone: () => void
@@ -289,7 +289,7 @@ export function chatCompletion(
  * 支持流式（SSE data: 行）与非流式两种模式，返回 AbortController 以便中断。
  */
 function openAICompletion(
-	settings: QoderChatSettings,
+	settings: NotePilotSettings,
 	messages: LlmRequestMessage[],
 	callbacks: LlmCallbacks,
 	onDone: () => void
@@ -388,7 +388,7 @@ function openAICompletion(
  * 流式为 SSE，content_block_delta 事件的 delta.text 为增量文本。
  */
 function anthropicCompletion(
-	settings: QoderChatSettings,
+	settings: NotePilotSettings,
 	messages: LlmRequestMessage[],
 	callbacks: LlmCallbacks,
 	onDone: () => void
@@ -501,7 +501,7 @@ function anthropicCompletion(
  * 认证走 ?key= 查询参数；system → systemInstruction，assistant → model。
  */
 function geminiCompletion(
-	settings: QoderChatSettings,
+	settings: NotePilotSettings,
 	messages: LlmRequestMessage[],
 	callbacks: LlmCallbacks,
 	onDone: () => void

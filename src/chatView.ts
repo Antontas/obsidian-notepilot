@@ -1,4 +1,4 @@
-// Qoder Clone —— 侧边栏视图（登录 / 历史会话 / 聊天）
+// NotePilot —— 侧边栏视图（登录 / 历史会话 / 聊天）
 // 界面与交互参照 Continue（Apache 2.0）独立实现
 
 import {
@@ -10,7 +10,7 @@ import {
 	TFile,
 	WorkspaceLeaf,
 } from "obsidian";
-import type QoderChatPlugin from "./main";
+import type NotePilotPlugin from "./main";
 import { ChatMessage } from "./sessions";
 import {
 	formatDate,
@@ -23,12 +23,12 @@ import { loadRules } from "./rules";
 import { agentToolPrompt, applyEdit, parseEditBlocks, ParsedEdit } from "./fileTools";
 import { lineDiff } from "./diff";
 
-export const VIEW_TYPE_QODER_CHAT = "qoder-chat-view";
+export const VIEW_TYPE_NOTEPILOT = "notepilot-chat-view";
 
 type PanelState = "chat" | "history";
 
-export class QoderChatView extends ItemView {
-	plugin: QoderChatPlugin;
+export class NotePilotView extends ItemView {
+	plugin: NotePilotPlugin;
 	private state: PanelState = "chat";
 	private messagesEl!: HTMLElement;
 	private inputEl!: HTMLTextAreaElement;
@@ -44,17 +44,17 @@ export class QoderChatView extends ItemView {
 	private abortController: AbortController | null = null;
 	private generating = false;
 
-	constructor(leaf: WorkspaceLeaf, plugin: QoderChatPlugin) {
+	constructor(leaf: WorkspaceLeaf, plugin: NotePilotPlugin) {
 		super(leaf);
 		this.plugin = plugin;
 	}
 
 	getViewType(): string {
-		return VIEW_TYPE_QODER_CHAT;
+		return VIEW_TYPE_NOTEPILOT;
 	}
 
 	getDisplayText(): string {
-		return "Qoder Clone";
+		return "NotePilot";
 	}
 
 	getIcon(): string {
@@ -76,7 +76,7 @@ export class QoderChatView extends ItemView {
 	private render(): void {
 		const root = this.containerEl.children[1] as HTMLElement;
 		root.empty();
-		root.addClass("qoder-view");
+		root.addClass("notepilot-view");
 		if (!this.plugin.isLoggedIn()) {
 			this.renderLogin(root);
 			return;
@@ -91,21 +91,21 @@ export class QoderChatView extends ItemView {
 	// ============ 登录页 ============
 
 	private renderLogin(root: HTMLElement): void {
-		const wrap = root.createDiv({ cls: "qoder-login-wrap" });
-		const card = wrap.createDiv({ cls: "qoder-login-card" });
+		const wrap = root.createDiv({ cls: "notepilot-login-wrap" });
+		const card = wrap.createDiv({ cls: "notepilot-login-card" });
 
-		const logo = card.createDiv({ cls: "qoder-logo" });
+		const logo = card.createDiv({ cls: "notepilot-logo" });
 		setIcon(logo, "bot");
-		card.createEl("div", { cls: "qoder-logo-text", text: "Qoder" });
-		card.createEl("h2", { cls: "qoder-login-title", text: "登录 Qoder Clone" });
+		card.createEl("div", { cls: "notepilot-logo-text", text: "NotePilot" });
+		card.createEl("h2", { cls: "notepilot-login-title", text: "登录 NotePilot" });
 		card.createEl("p", {
-			cls: "qoder-login-desc",
+			cls: "notepilot-login-desc",
 			text: "选择服务商并输入 API Key 登录，密钥仅保存在本机 Obsidian 配置中。",
 		});
 
 		// 服务商选择
 		const providerSelect = card.createEl("select", {
-			cls: "qoder-login-input",
+			cls: "notepilot-login-input",
 		});
 		for (const [p, preset] of Object.entries(PROVIDER_PRESETS)) {
 			const opt = providerSelect.createEl("option", {
@@ -116,28 +116,28 @@ export class QoderChatView extends ItemView {
 		}
 
 		const keyInput = card.createEl("input", {
-			cls: "qoder-login-input",
+			cls: "notepilot-login-input",
 			type: "password",
 			attr: { placeholder: "输入 API Key（sk-...）" },
 		});
 
-		const adv = card.createDiv({ cls: "qoder-login-adv" });
+		const adv = card.createDiv({ cls: "notepilot-login-adv" });
 		adv.createEl("label", { text: "Base URL" });
 		const urlInput = adv.createEl("input", {
-			cls: "qoder-login-input",
+			cls: "notepilot-login-input",
 			type: "text",
 			value: this.plugin.settings.baseUrl,
 		});
 
-		const statusEl = card.createDiv({ cls: "qoder-login-status" });
+		const statusEl = card.createDiv({ cls: "notepilot-login-status" });
 
 		const loginBtn = card.createEl("button", {
-			cls: "qoder-login-btn",
+			cls: "notepilot-login-btn",
 			text: "登 录",
 		});
 
 		const link = card.createEl("a", {
-			cls: "qoder-login-link",
+			cls: "notepilot-login-link",
 			text: "获取 API Key →",
 		});
 
@@ -201,7 +201,7 @@ export class QoderChatView extends ItemView {
 			const result = await verifyApiKey(this.plugin.settings);
 			loginBtn.disabled = false;
 			if (result.ok) {
-				new Notice("Qoder Clone 登录成功");
+				new Notice("NotePilot 登录成功");
 				await this.plugin.saveAll();
 				// 登录成功后自动拉取该服务的可用模型列表（静默，失败不提示）
 				const fetched = await fetchModels(this.plugin.settings);
@@ -224,9 +224,9 @@ export class QoderChatView extends ItemView {
 	// ============ 历史会话列表（参照 Continue History 页） ============
 
 	private renderHistory(root: HTMLElement): void {
-		const header = root.createDiv({ cls: "qoder-header" });
+		const header = root.createDiv({ cls: "notepilot-header" });
 		const backBtn = header.createEl("button", {
-			cls: "qoder-icon-btn",
+			cls: "notepilot-icon-btn",
 			attr: { title: "返回聊天" },
 		});
 		setIcon(backBtn, "arrow-left");
@@ -234,11 +234,11 @@ export class QoderChatView extends ItemView {
 			this.state = "chat";
 			this.render();
 		});
-		header.createDiv({ cls: "qoder-header-title", text: "历史会话" });
-		header.createDiv({ cls: "qoder-toolbar-spacer" });
+		header.createDiv({ cls: "notepilot-header-title", text: "历史会话" });
+		header.createDiv({ cls: "notepilot-toolbar-spacer" });
 
 		const newBtn = header.createEl("button", {
-			cls: "qoder-icon-btn",
+			cls: "notepilot-icon-btn",
 			attr: { title: "新对话" },
 		});
 		setIcon(newBtn, "square-plus");
@@ -248,38 +248,38 @@ export class QoderChatView extends ItemView {
 			this.render();
 		});
 
-		const list = root.createDiv({ cls: "qoder-history-list" });
+		const list = root.createDiv({ cls: "notepilot-history-list" });
 		const sessions = [...this.plugin.sessions].sort(
 			(a, b) => b.updatedAt - a.updatedAt
 		);
 		if (sessions.length === 0) {
-			list.createDiv({ cls: "qoder-chat-empty", text: "暂无会话" });
+			list.createDiv({ cls: "notepilot-chat-empty", text: "暂无会话" });
 			return;
 		}
 
 		for (const s of sessions) {
-			const row = list.createDiv({ cls: "qoder-history-row" });
+			const row = list.createDiv({ cls: "notepilot-history-row" });
 			if (s.id === this.plugin.currentSessionId) {
-				row.addClass("qoder-history-row-active");
+				row.addClass("notepilot-history-row-active");
 			}
 
-			const body = row.createDiv({ cls: "qoder-history-body" });
-			const titleRow = body.createDiv({ cls: "qoder-history-title-row" });
+			const body = row.createDiv({ cls: "notepilot-history-body" });
+			const titleRow = body.createDiv({ cls: "notepilot-history-title-row" });
 			const titleEl = titleRow.createSpan({
-				cls: "qoder-history-title",
+				cls: "notepilot-history-title",
 				text: s.title,
 			});
 			const count = s.messages.filter((m) => m.role !== "error").length;
-			titleRow.createSpan({ cls: "qoder-history-count", text: String(count) });
+			titleRow.createSpan({ cls: "notepilot-history-count", text: String(count) });
 			body.createDiv({
-				cls: "qoder-history-date",
+				cls: "notepilot-history-date",
 				text: formatDate(s.updatedAt),
 			});
 
 			// hover 操作按钮：重命名 / 导出 Markdown / 删除
-			const actions = row.createDiv({ cls: "qoder-history-actions" });
+			const actions = row.createDiv({ cls: "notepilot-history-actions" });
 			const editBtn = actions.createEl("button", {
-				cls: "qoder-icon-btn",
+				cls: "notepilot-icon-btn",
 				attr: { title: "重命名" },
 			});
 			setIcon(editBtn, "pencil");
@@ -289,7 +289,7 @@ export class QoderChatView extends ItemView {
 			});
 
 			const exportBtn = actions.createEl("button", {
-				cls: "qoder-icon-btn",
+				cls: "notepilot-icon-btn",
 				attr: { title: "导出为 Markdown" },
 			});
 			setIcon(exportBtn, "download");
@@ -299,7 +299,7 @@ export class QoderChatView extends ItemView {
 			});
 
 			const delBtn = actions.createEl("button", {
-				cls: "qoder-icon-btn qoder-icon-btn-danger",
+				cls: "notepilot-icon-btn notepilot-icon-btn-danger",
 				attr: { title: "删除" },
 			});
 			setIcon(delBtn, "trash-2");
@@ -325,7 +325,7 @@ export class QoderChatView extends ItemView {
 		const input = document.createElement("input");
 		input.type = "text";
 		input.value = session.title;
-		input.addClass("qoder-history-rename");
+		input.addClass("notepilot-history-rename");
 		titleEl.replaceWith(input);
 		input.focus();
 		input.select();
@@ -347,10 +347,10 @@ export class QoderChatView extends ItemView {
 		const session = this.plugin.sessions.find((x) => x.id === id);
 		if (!session) return;
 		const safe = session.title.replace(/[\\/:*?"<>|#^\[\]]/g, "").slice(0, 40);
-		let path = `Qoder Clone ${safe}.md`;
+		let path = `NotePilot ${safe}.md`;
 		let n = 1;
 		while (this.app.vault.getAbstractFileByPath(path)) {
-			path = `Qoder Clone ${safe} ${n++}.md`;
+			path = `NotePilot ${safe} ${n++}.md`;
 		}
 		const file = await this.app.vault.create(path, sessionToMarkdown(session));
 		new Notice(`已导出：${path}`);
@@ -361,14 +361,14 @@ export class QoderChatView extends ItemView {
 	// ============ 聊天页 ============
 
 	private renderChat(root: HTMLElement): void {
-		const header = root.createDiv({ cls: "qoder-header" });
-		const title = header.createDiv({ cls: "qoder-header-title" });
+		const header = root.createDiv({ cls: "notepilot-header" });
+		const title = header.createDiv({ cls: "notepilot-header-title" });
 		setIcon(title, "bot");
-		title.createSpan({ text: "Qoder Clone" });
-		header.createDiv({ cls: "qoder-toolbar-spacer" });
+		title.createSpan({ text: "NotePilot" });
+		header.createDiv({ cls: "notepilot-toolbar-spacer" });
 
 		const historyBtn = header.createEl("button", {
-			cls: "qoder-icon-btn",
+			cls: "notepilot-icon-btn",
 			attr: { title: "历史会话" },
 		});
 		setIcon(historyBtn, "history");
@@ -378,7 +378,7 @@ export class QoderChatView extends ItemView {
 		});
 
 		const newBtn = header.createEl("button", {
-			cls: "qoder-icon-btn",
+			cls: "notepilot-icon-btn",
 			attr: { title: "新对话" },
 		});
 		setIcon(newBtn, "square-plus");
@@ -389,14 +389,14 @@ export class QoderChatView extends ItemView {
 		});
 
 		const logoutBtn = header.createEl("button", {
-			cls: "qoder-icon-btn",
+			cls: "notepilot-icon-btn",
 			attr: { title: "退出登录" },
 		});
 		setIcon(logoutBtn, "log-out");
 		logoutBtn.addEventListener("click", () => this.logout());
 
 		// 消息区
-		this.messagesEl = root.createDiv({ cls: "qoder-chat-messages" });
+		this.messagesEl = root.createDiv({ cls: "notepilot-chat-messages" });
 		this.renderMessages();
 
 		// 自动识别划词：渲染聊天界面时消费暂存的选区文本
@@ -406,13 +406,13 @@ export class QoderChatView extends ItemView {
 		}
 
 		// 附加文件 chips
-		this.chipsEl = root.createDiv({ cls: "qoder-chips" });
+		this.chipsEl = root.createDiv({ cls: "notepilot-chips" });
 		this.renderChips();
 
 		// 输入盒
-		const inputBox = root.createDiv({ cls: "qoder-input-box" });
+		const inputBox = root.createDiv({ cls: "notepilot-input-box" });
 		this.inputEl = inputBox.createEl("textarea", {
-			cls: "qoder-chat-input",
+			cls: "notepilot-chat-input",
 			attr: {
 				placeholder: "提问…（@ 引用笔记，拖入文件附加，Enter 发送）",
 				rows: "2",
@@ -423,19 +423,19 @@ export class QoderChatView extends ItemView {
 		this.registerDomEvent(inputBox, "dragover", (evt) => {
 			evt.preventDefault();
 			if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
-			inputBox.addClass("qoder-dragover");
+			inputBox.addClass("notepilot-dragover");
 		});
 		this.registerDomEvent(inputBox, "dragleave", () => {
-			inputBox.removeClass("qoder-dragover");
+			inputBox.removeClass("notepilot-dragover");
 		});
 		this.registerDomEvent(inputBox, "drop", (evt) => {
-			inputBox.removeClass("qoder-dragover");
+			inputBox.removeClass("notepilot-dragover");
 			void this.onDropFiles(evt);
 		});
 
-		const toolbar = inputBox.createDiv({ cls: "qoder-input-toolbar" });
+		const toolbar = inputBox.createDiv({ cls: "notepilot-input-toolbar" });
 		const modelSelect = toolbar.createEl("select", {
-			cls: "qoder-model-select",
+			cls: "notepilot-model-select",
 		});
 		// 优先用从 API 拉取到的模型列表，否则用预置列表
 		const presetModels = PROVIDER_MODELS[this.plugin.settings.provider];
@@ -459,7 +459,7 @@ export class QoderChatView extends ItemView {
 
 		// 从 API 拉取可用模型列表
 		const refreshModelsBtn = toolbar.createEl("button", {
-			cls: "qoder-icon-btn",
+			cls: "notepilot-icon-btn",
 			attr: { title: "从 API 拉取可用模型列表" },
 		});
 		setIcon(refreshModelsBtn, "refresh-cw");
@@ -469,7 +469,7 @@ export class QoderChatView extends ItemView {
 
 		if (this.plugin.settings.includeActiveNote) {
 			const badge = toolbar.createDiv({
-				cls: "qoder-ctx-badge",
+				cls: "notepilot-ctx-badge",
 				text: "📄 当前笔记",
 			});
 			badge.setAttribute("title", "提问时将附带当前笔记内容");
@@ -477,12 +477,12 @@ export class QoderChatView extends ItemView {
 
 		// Agent 模式开关：开启后 AI 可提出文件修改建议（需审批）
 		const agentBtn = toolbar.createEl("button", {
-			cls: "qoder-mode-btn",
+			cls: "notepilot-mode-btn",
 			text: "⚡ Agent",
 		});
 		agentBtn.setAttribute("title", "Agent 模式：AI 可建议创建/修改库内文件（需你审批）");
 		const syncAgentBtn = () =>
-			agentBtn.toggleClass("qoder-mode-on", this.plugin.settings.agentMode);
+			agentBtn.toggleClass("notepilot-mode-on", this.plugin.settings.agentMode);
 		syncAgentBtn();
 		agentBtn.addEventListener("click", () => {
 			this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
@@ -495,16 +495,16 @@ export class QoderChatView extends ItemView {
 			);
 		});
 
-		toolbar.createDiv({ cls: "qoder-toolbar-spacer" });
+		toolbar.createDiv({ cls: "notepilot-toolbar-spacer" });
 
 		this.stopBtn = toolbar.createEl("button", {
-			cls: "qoder-chat-stop",
+			cls: "notepilot-chat-stop",
 			text: "停止",
 		});
 		this.stopBtn.style.display = "none";
 		this.stopBtn.addEventListener("click", () => this.stop());
 
-		this.sendBtn = toolbar.createEl("button", { cls: "qoder-chat-send" });
+		this.sendBtn = toolbar.createEl("button", { cls: "notepilot-chat-send" });
 		setIcon(this.sendBtn, "arrow-up");
 		this.sendBtn.setAttribute("aria-label", "发送");
 		this.sendBtn.addEventListener("click", () => void this.send());
@@ -530,16 +530,16 @@ export class QoderChatView extends ItemView {
 	}
 
 	private renderWelcome(): void {
-		const w = this.messagesEl.createDiv({ cls: "qoder-welcome" });
-		w.createDiv({ cls: "qoder-welcome-hi", text: "你好 👋" });
+		const w = this.messagesEl.createDiv({ cls: "notepilot-welcome" });
+		w.createDiv({ cls: "notepilot-welcome-hi", text: "你好 👋" });
 		w.createDiv({
-			cls: "qoder-welcome-sub",
-			text: "我是 Qoder Clone，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
+			cls: "notepilot-welcome-sub",
+			text: "我是 NotePilot，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
 		});
-		const grid = w.createDiv({ cls: "qoder-suggestions" });
+		const grid = w.createDiv({ cls: "notepilot-suggestions" });
 		for (const s of SUGGESTIONS) {
 			const btn = grid.createEl("button", {
-				cls: "qoder-suggestion-btn",
+				cls: "notepilot-suggestion-btn",
 				text: s.title,
 			});
 			btn.addEventListener("click", () => void this.sendText(s.prompt));
@@ -549,10 +549,10 @@ export class QoderChatView extends ItemView {
 	private appendMessageEl(msg: ChatMessage): HTMLElement {
 		const cls =
 			msg.role === "user"
-				? "qoder-msg qoder-msg-user"
+				? "notepilot-msg notepilot-msg-user"
 				: msg.role === "error"
-				? "qoder-msg qoder-msg-system-err"
-				: "qoder-msg qoder-msg-assistant";
+				? "notepilot-msg notepilot-msg-system-err"
+				: "notepilot-msg notepilot-msg-assistant";
 		const el = this.messagesEl.createDiv({ cls });
 		if (msg.role === "user" || msg.role === "error") {
 			el.setText(msg.content);
@@ -570,9 +570,9 @@ export class QoderChatView extends ItemView {
 	/** 为代码块添加 复制 / 插入笔记 按钮（参照 Continue 代码块操作） */
 	private addCodeActions(el: HTMLElement): void {
 		el.querySelectorAll("pre").forEach((pre) => {
-			if (pre.querySelector(".qoder-code-actions")) return;
+			if (pre.querySelector(".notepilot-code-actions")) return;
 			const bar = document.createElement("div");
-			bar.addClass("qoder-code-actions");
+			bar.addClass("notepilot-code-actions");
 			const copyBtn = bar.createEl("button", { text: "复制" });
 			copyBtn.addEventListener("click", () => {
 				const code = pre.querySelector("code");
@@ -618,7 +618,7 @@ export class QoderChatView extends ItemView {
 				""
 			).trim();
 			const firstLine = t.split("\n", 1)[0].trim();
-			if (/^qoder[-_ ]?edit$/i.test(firstLine)) {
+			if (/^(notepilot|qoder)[-_ ]?edit$/i.test(firstLine)) {
 				t = t.slice(firstLine.length).trim();
 			}
 			if (raws.has(t)) pre.remove();
@@ -631,32 +631,32 @@ export class QoderChatView extends ItemView {
 			this.stripRenderedEditBlocks(container, parsed);
 		}
 		// 防重：同一条消息只渲染一次审批卡片
-		if (parsed.length === 0 || container.querySelector(".qoder-edit-cards")) {
+		if (parsed.length === 0 || container.querySelector(".notepilot-edit-cards")) {
 			return;
 		}
 
-		const wrap = container.createDiv({ cls: "qoder-edit-cards" });
+		const wrap = container.createDiv({ cls: "notepilot-edit-cards" });
 		wrap.createDiv({
-			cls: "qoder-edit-cards-title",
+			cls: "notepilot-edit-cards-title",
 			text: `📝 检测到 ${parsed.length} 项文件修改建议，确认后生效`,
 		});
 
 		for (const p of parsed) {
-			const card = wrap.createDiv({ cls: "qoder-edit-card" });
+			const card = wrap.createDiv({ cls: "notepilot-edit-card" });
 
 			if (!p.edit) {
 				card.createDiv({
-					cls: "qoder-edit-path",
+					cls: "notepilot-edit-path",
 					text: `⚠️ 编辑块解析失败：${p.error ?? "未知错误"}`,
 				});
-				card.createEl("pre", { cls: "qoder-edit-raw", text: p.raw });
+				card.createEl("pre", { cls: "notepilot-edit-raw", text: p.raw });
 				continue;
 			}
 
 			const edit = p.edit;
-			const head = card.createDiv({ cls: "qoder-edit-head" });
+			const head = card.createDiv({ cls: "notepilot-edit-head" });
 			head.createSpan({
-				cls: `qoder-edit-action qoder-edit-action-${edit.action}`,
+				cls: `notepilot-edit-action notepilot-edit-action-${edit.action}`,
 				text:
 					edit.action === "replace"
 						? "替换"
@@ -664,16 +664,16 @@ export class QoderChatView extends ItemView {
 						? "新建"
 						: "覆写",
 			});
-			head.createSpan({ cls: "qoder-edit-path", text: edit.path });
+			head.createSpan({ cls: "notepilot-edit-path", text: edit.path });
 
 			// Diff 预览
-			const diffEl = card.createDiv({ cls: "qoder-edit-diff" });
+			const diffEl = card.createDiv({ cls: "notepilot-edit-diff" });
 			const addDiffLine = (type: "add" | "del" | "same", lineText: string) => {
 				const row = diffEl.createDiv({
-					cls: `qoder-diff-line qoder-diff-${type}`,
+					cls: `notepilot-diff-line notepilot-diff-${type}`,
 				});
 				row.createSpan({
-					cls: "qoder-diff-mark",
+					cls: "notepilot-diff-mark",
 					text: type === "add" ? "+" : type === "del" ? "−" : " ",
 				});
 				row.createSpan({ text: lineText || " " });
@@ -688,15 +688,15 @@ export class QoderChatView extends ItemView {
 				for (const l of allLines.slice(0, 12)) addDiffLine("add", l);
 				if (allLines.length > 12) {
 					diffEl.createDiv({
-						cls: "qoder-diff-line",
+						cls: "notepilot-diff-line",
 						text: `…（共 ${allLines.length} 行）`,
 					});
 				}
 			}
 
 			// 操作按钮
-			const btnRow = card.createDiv({ cls: "qoder-edit-btns" });
-			const status = btnRow.createSpan({ cls: "qoder-edit-status" });
+			const btnRow = card.createDiv({ cls: "notepilot-edit-btns" });
+			const status = btnRow.createSpan({ cls: "notepilot-edit-status" });
 			const reject = btnRow.createEl("button", { text: "拒绝" });
 			const apply = btnRow.createEl("button", {
 				text: "应用",
@@ -824,21 +824,21 @@ export class QoderChatView extends ItemView {
 
 		if (!this.popupEl) {
 			const root = this.containerEl.children[1] as HTMLElement;
-			this.popupEl = root.createDiv({ cls: "qoder-at-popup" });
+			this.popupEl = root.createDiv({ cls: "notepilot-at-popup" });
 		}
 		this.popupEl.empty();
 		if (files.length === 0) {
 			this.popupEl.createDiv({
-				cls: "qoder-at-item qoder-at-empty",
+				cls: "notepilot-at-item notepilot-at-empty",
 				text: "没有匹配的笔记",
 			});
 			return;
 		}
 		files.forEach((f, idx) => {
-			const item = this.popupEl!.createDiv({ cls: "qoder-at-item" });
-			item.createSpan({ cls: "qoder-at-name", text: f.basename });
-			item.createSpan({ cls: "qoder-at-path", text: f.path });
-			if (idx === this.popupIndex) item.addClass("qoder-at-active");
+			const item = this.popupEl!.createDiv({ cls: "notepilot-at-item" });
+			item.createSpan({ cls: "notepilot-at-name", text: f.basename });
+			item.createSpan({ cls: "notepilot-at-path", text: f.path });
+			if (idx === this.popupIndex) item.addClass("notepilot-at-active");
 			item.addEventListener("mousedown", (e) => {
 				e.preventDefault();
 				this.selectAtFile(f);
@@ -848,8 +848,8 @@ export class QoderChatView extends ItemView {
 
 	private highlightPopup(): void {
 		if (!this.popupEl) return;
-		this.popupEl.querySelectorAll(".qoder-at-item").forEach((el, idx) => {
-			el.toggleClass("qoder-at-active", idx === this.popupIndex);
+		this.popupEl.querySelectorAll(".notepilot-at-item").forEach((el, idx) => {
+			el.toggleClass("notepilot-at-active", idx === this.popupIndex);
 		});
 	}
 
@@ -894,10 +894,10 @@ export class QoderChatView extends ItemView {
 
 		if (this.quotedText !== null) {
 			const q = this.quotedText;
-			const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+			const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
 			chip.createSpan({ text: `📋 划词选中（${q.length} 字）` });
 			chip.setAttribute("title", q.slice(0, 200));
-			const x = chip.createSpan({ cls: "qoder-chip-x", text: "×" });
+			const x = chip.createSpan({ cls: "notepilot-chip-x", text: "×" });
 			x.addEventListener("click", () => {
 				this.quotedText = null;
 				this.renderChips();
@@ -905,9 +905,9 @@ export class QoderChatView extends ItemView {
 		}
 
 		for (const ef of this.externalFiles) {
-			const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+			const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
 			chip.createSpan({ text: `📎 ${ef.name}` });
-			const x = chip.createSpan({ cls: "qoder-chip-x", text: "×" });
+			const x = chip.createSpan({ cls: "notepilot-chip-x", text: "×" });
 			x.addEventListener("click", () => {
 				this.externalFiles = this.externalFiles.filter((f) => f !== ef);
 				this.renderChips();
@@ -915,10 +915,10 @@ export class QoderChatView extends ItemView {
 		}
 
 		for (const path of this.attachedFiles) {
-			const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+			const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
 			const name = path.split("/").pop()?.replace(/\.md$/, "") ?? path;
 			chip.createSpan({ text: `📄 ${name}` });
-			const x = chip.createSpan({ cls: "qoder-chip-x", text: "×" });
+			const x = chip.createSpan({ cls: "notepilot-chip-x", text: "×" });
 			x.addEventListener("click", () => {
 				this.attachedFiles = this.attachedFiles.filter((p) => p !== path);
 				this.renderChips();
@@ -1119,7 +1119,7 @@ export class QoderChatView extends ItemView {
 		this.renderMessages();
 		const assistantEl = this.messagesEl.lastElementChild as HTMLElement;
 		assistantEl.empty();
-		assistantEl.createSpan({ cls: "qoder-thinking", text: "思考中…" });
+		assistantEl.createSpan({ cls: "notepilot-thinking", text: "思考中…" });
 		this.setBusy(true);
 
 		const requestMessages = await this.buildRequestMessages(
@@ -1151,7 +1151,7 @@ export class QoderChatView extends ItemView {
 				onError: (message) => {
 					assistantMsg.role = "error";
 					assistantMsg.content = message;
-					assistantEl.className = "qoder-msg qoder-msg-system-err";
+					assistantEl.className = "notepilot-msg notepilot-msg-system-err";
 					assistantEl.setText(message);
 					new Notice(message);
 				},

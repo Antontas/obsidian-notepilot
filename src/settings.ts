@@ -1,9 +1,9 @@
-// Qoder Chat —— 设置类型与默认值
+// NotePilot —— 设置类型与默认值
 
 import { ChatSession } from "./sessions";
 
 export interface StoredData {
-	settings: QoderChatSettings;
+	settings: NotePilotSettings;
 	sessions: ChatSession[];
 	currentSessionId: string;
 }
@@ -26,7 +26,7 @@ export type Provider =
 /** API 协议格式：OpenAI 兼容 / Anthropic 原生 / Gemini 原生 */
 export type ApiFormat = "openai" | "anthropic" | "gemini";
 
-export interface QoderChatSettings {
+export interface NotePilotSettings {
 	provider: Provider;
 	baseUrl: string;
 	apiKey: string;
@@ -199,13 +199,13 @@ export const SUGGESTIONS: { title: string; prompt: string }[] = [
 	{ title: "翻译笔记", prompt: "请将当前笔记翻译成英文，保持 Markdown 格式。" },
 ];
 
-export const DEFAULT_SETTINGS: QoderChatSettings = {
+export const DEFAULT_SETTINGS: NotePilotSettings = {
 	provider: "dashscope",
 	baseUrl: PROVIDER_PRESETS.dashscope.baseUrl,
 	apiKey: "",
 	model: PROVIDER_PRESETS.dashscope.model,
 	systemPrompt:
-		"你是 Qoder Clone，一个集成在 Obsidian 中的 AI 编程与写作助手。请用中文回答，回答简洁、准确，必要时使用 Markdown 格式。",
+		"你是 NotePilot，一个集成在 Obsidian 中的 AI 编程与写作助手。请用中文回答，回答简洁、准确，必要时使用 Markdown 格式。",
 	temperature: 0.7,
 	maxTokens: 2048,
 	stream: true,

@@ -1,4 +1,4 @@
-// Qoder Clone —— 插件主入口
+// NotePilot —— 插件主入口
 // UI/架构参照 Continue（Apache 2.0, github.com/continuedev/continue）独立实现
 
 import type { Editor, WorkspaceLeaf } from "obsidian";
@@ -15,7 +15,7 @@ import { EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import {
 	DEFAULT_SETTINGS,
 	PROVIDER_PRESETS,
-	QoderChatSettings,
+	NotePilotSettings,
 	StoredData,
 } from "./settings";
 import type { ApiFormat, Provider } from "./settings";
@@ -26,11 +26,11 @@ import {
 } from "./sessions";
 import { chatCompletion, LlmRequestMessage } from "./llm";
 import { lineDiff } from "./diff";
-import { QoderChatView, VIEW_TYPE_QODER_CHAT } from "./chatView";
+import { NotePilotView, VIEW_TYPE_NOTEPILOT } from "./chatView";
 
 // ============ 划词自动识别：选区稳定后自动引用到聊天输入框（CM6 扩展） ============
 
-function selectionAutoQuoteExtension(plugin: QoderChatPlugin) {
+function selectionAutoQuoteExtension(plugin: NotePilotPlugin) {
 	return ViewPlugin.fromClass(
 		class {
 			private timer: number | null = null;
@@ -60,8 +60,8 @@ function selectionAutoQuoteExtension(plugin: QoderChatPlugin) {
 	);
 }
 
-export default class QoderChatPlugin extends Plugin {
-	settings: QoderChatSettings = DEFAULT_SETTINGS;
+export default class NotePilotPlugin extends Plugin {
+	settings: NotePilotSettings = DEFAULT_SETTINGS;
 	sessions: ChatSession[] = [];
 	currentSessionId = "";
 	private statusBarEl: HTMLElement | null = null;
@@ -118,26 +118,26 @@ export default class QoderChatPlugin extends Plugin {
 		await this.loadAll();
 
 		this.registerView(
-			VIEW_TYPE_QODER_CHAT,
-			(leaf) => new QoderChatView(leaf, this)
+			VIEW_TYPE_NOTEPILOT,
+			(leaf) => new NotePilotView(leaf, this)
 		);
 
 		this.statusBarEl = this.addStatusBarItem();
 		this.updateStatusBar();
 
-		this.addRibbonIcon("bot", "打开 Qoder Clone", () => {
+		this.addRibbonIcon("bot", "打开 NotePilot", () => {
 			void this.activateView();
 		});
 
 		this.addCommand({
-			id: "open-qoder-chat",
-			name: "打开 Qoder Clone 面板",
+			id: "open-notepilot",
+			name: "打开 NotePilot 面板",
 			callback: () => void this.activateView(),
 		});
 
 		this.addCommand({
-			id: "new-qoder-chat",
-			name: "新建 Qoder Clone 对话",
+			id: "new-notepilot-chat",
+			name: "新建 NotePilot 对话",
 			callback: () => {
 				this.newSession();
 				this.refreshView();
@@ -171,7 +171,7 @@ export default class QoderChatPlugin extends Plugin {
 				if (!sel.trim()) return;
 				menu.addItem((item) => {
 					item
-						.setTitle("Qoder Clone：划词提问")
+						.setTitle("NotePilot：划词提问")
 						.setIcon("quote")
 						.onClick(() => void this.askSelection(sel));
 				});
@@ -179,18 +179,18 @@ export default class QoderChatPlugin extends Plugin {
 		);
 
 		this.addCommand({
-			id: "logout-qoder-chat",
-			name: "退出 Qoder Clone 登录",
+			id: "logout-notepilot-chat",
+			name: "退出 NotePilot 登录",
 			callback: () => {
 				this.settings.apiKey = "";
 				void this.saveAll();
 				this.updateStatusBar();
 				this.refreshView();
-				new Notice("已退出 Qoder Clone 登录");
+				new Notice("已退出 NotePilot 登录");
 			},
 		});
 
-		this.addSettingTab(new QoderChatSettingTab(this.app, this));
+		this.addSettingTab(new NotePilotSettingTab(this.app, this));
 
 		// 划词自动识别：选中文本稳定后自动引用到聊天输入框
 		this.registerEditorExtension(selectionAutoQuoteExtension(this));
@@ -200,26 +200,26 @@ export default class QoderChatPlugin extends Plugin {
 		if (!this.statusBarEl) return;
 		if (this.isLoggedIn()) {
 			this.statusBarEl.setText(
-				`Qoder · 已登录 · ${this.settings.model}`
+				`NotePilot · 已登录 · ${this.settings.model}`
 			);
 		} else {
-			this.statusBarEl.setText("Qoder · 未登录");
+			this.statusBarEl.setText("NotePilot · 未登录");
 		}
 	}
 
 	onunload(): void {
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_QODER_CHAT);
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_NOTEPILOT);
 	}
 
 	async activateView(): Promise<void> {
 		const { workspace } = this.app;
 		let leaf: WorkspaceLeaf | undefined =
-			workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+			workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
 		if (!leaf) {
 			leaf = workspace.getRightLeaf(false) ?? undefined;
 			if (leaf) {
 				await leaf.setViewState({
-					type: VIEW_TYPE_QODER_CHAT,
+					type: VIEW_TYPE_NOTEPILOT,
 					active: true,
 				});
 			}
@@ -230,22 +230,22 @@ export default class QoderChatPlugin extends Plugin {
 	/** 划词提问：打开面板并将选中文本引用到输入框 */
 	async askSelection(text: string): Promise<void> {
 		await this.activateView();
-		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
-		const view = leaf?.view as QoderChatView | undefined;
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
+		const view = leaf?.view as NotePilotView | undefined;
 		view?.attachQuotedText(text);
 	}
 
 	/** 自动识别划词：记录选区文本并同步到已打开的面板（不抢焦点、不提示） */
 	autoQuoteSelection(text: string): void {
 		this.pendingQuotedText = text;
-		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
-		const view = leaf?.view as QoderChatView | undefined;
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
+		const view = leaf?.view as NotePilotView | undefined;
 		view?.attachQuotedText(text, true);
 	}
 
 	refreshView(): void {
-		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
-		const view = leaf?.view as QoderChatView | undefined;
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_NOTEPILOT)[0];
+		const view = leaf?.view as NotePilotView | undefined;
 		view?.refresh();
 	}
 
@@ -302,7 +302,7 @@ export default class QoderChatPlugin extends Plugin {
 	/** Inline Chat：选中文本 → 指令 → AI 改写 → Diff 预览 → 应用 */
 	async inlineChat(editor: Editor, view: MarkdownView): Promise<void> {
 		if (!this.isLoggedIn()) {
-			new Notice("请先登录 Qoder Clone");
+			new Notice("请先登录 NotePilot");
 			return;
 		}
 		const sel = editor.getSelection();
@@ -314,7 +314,7 @@ export default class QoderChatPlugin extends Plugin {
 		const instruction = await new InstructionModal(this.app).openAndWait();
 		if (instruction === null) return;
 
-		new Notice("Qoder Clone 正在改写…");
+		new Notice("NotePilot 正在改写…");
 		let result: string;
 		try {
 			result = await this.complete([
@@ -373,16 +373,16 @@ class InstructionModal extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
-		contentEl.addClass("qoder-modal");
+		contentEl.addClass("notepilot-modal");
 		contentEl.createEl("h3", { text: "Inline Chat：如何改写选中文本？" });
 		const input = contentEl.createEl("textarea", {
-			cls: "qoder-modal-input",
+			cls: "notepilot-modal-input",
 			attr: {
 				placeholder: "例如：润色语言 / 翻译成英文 / 精简为 3 句话…",
 				rows: "3",
 			},
 		});
-		const row = contentEl.createDiv({ cls: "qoder-modal-row" });
+		const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
 		const cancel = row.createEl("button", { text: "取消" });
 		const ok = row.createEl("button", {
 			text: "改写",
@@ -439,19 +439,19 @@ class DiffModal extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
-		contentEl.addClass("qoder-modal");
+		contentEl.addClass("notepilot-modal");
 		contentEl.createEl("h3", { text: "改动预览（Diff）" });
 
-		const diffEl = contentEl.createDiv({ cls: "qoder-diff" });
+		const diffEl = contentEl.createDiv({ cls: "notepilot-diff" });
 		for (const line of lineDiff(this.oldText, this.newText)) {
-			const row = diffEl.createDiv({ cls: `qoder-diff-line qoder-diff-${line.type}` });
+			const row = diffEl.createDiv({ cls: `notepilot-diff-line notepilot-diff-${line.type}` });
 			const mark =
 				line.type === "add" ? "+" : line.type === "del" ? "−" : " ";
-			row.createSpan({ cls: "qoder-diff-mark", text: mark });
+			row.createSpan({ cls: "notepilot-diff-mark", text: mark });
 			row.createSpan({ text: line.text || " " });
 		}
 
-		const row = contentEl.createDiv({ cls: "qoder-modal-row" });
+		const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
 		const reject = row.createEl("button", { text: "拒绝" });
 		const accept = row.createEl("button", {
 			text: "接受改动",
@@ -475,10 +475,10 @@ class DiffModal extends Modal {
 
 // ============ 设置页 ============
 
-class QoderChatSettingTab extends PluginSettingTab {
-	plugin: QoderChatPlugin;
+class NotePilotSettingTab extends PluginSettingTab {
+	plugin: NotePilotPlugin;
 
-	constructor(app: App, plugin: QoderChatPlugin) {
+	constructor(app: App, plugin: NotePilotPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -487,7 +487,7 @@ class QoderChatSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Qoder Clone 设置" });
+		containerEl.createEl("h2", { text: "NotePilot 设置" });
 
 		new Setting(containerEl)
 			.setName("登录状态")
@@ -588,7 +588,7 @@ class QoderChatSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("启用 Rules 规则文件")
-			.setDesc(`读取库根目录 .qoder-rules/*.md 中的规则，自动注入对话（参照 Continue 的 rules 机制）`)
+			.setDesc(`读取库根目录 .notepilot-rules/*.md 中的规则，自动注入对话（参照 Continue 的 rules 机制）`)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.rulesEnabled)
@@ -653,8 +653,8 @@ class QoderChatSettingTab extends PluginSettingTab {
 			);
 
 		containerEl.createEl("p", {
-			cls: "qoder-settings-notice",
-			text: "说明：本插件为仿 Qoder 的独立实现，界面与交互参照开源项目 Continue（Apache 2.0）。BYOK 模式需要你自己提供大模型 API，密钥仅存储在本机 Obsidian 配置中。",
+			cls: "notepilot-settings-notice",
+			text: "说明：本插件为仿 NotePilot 的独立实现，界面与交互参照开源项目 Continue（Apache 2.0）。BYOK 模式需要你自己提供大模型 API，密钥仅存储在本机 Obsidian 配置中。",
 		});
 	}
 

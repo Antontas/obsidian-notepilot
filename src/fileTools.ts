@@ -1,4 +1,4 @@
-// 文件修改工具 —— AI 产出 qoder-edit 编辑块，用户审批后应用到库内文件
+// 文件修改工具 —— AI 产出 notepilot-edit 编辑块，用户审批后应用到库内文件
 // 审批机制参照 Cline 的 human-in-the-loop 模式
 
 import { App, TFile } from "obsidian";
@@ -44,8 +44,8 @@ function validateEdit(obj: EditBlock): void {
 /**
  * 从回复文本中解析所有编辑块。
  * 兼容模型可能产出的三种写法：
- * 1. ```qoder-edit 围栏（标准）
- * 2. 普通围栏，块内首行写了 qoder-edit
+ * 1. ```notepilot-edit 围栏（标准）
+ * 2. 普通围栏，块内首行写了 notepilot-edit
  * 3. 普通 json 围栏，内容形状符合 EditBlock（仅形状匹配才认定，避免误伤普通 JSON 示例）
  */
 export function parseEditBlocks(text: string): ParsedEdit[] {
@@ -55,12 +55,15 @@ export function parseEditBlocks(text: string): ParsedEdit[] {
 	while ((m = re.exec(text)) !== null) {
 		const lang = m[1].trim().toLowerCase();
 		let body = m[2].trim();
-		const isEditFence = lang === "qoder-edit" || lang === "qoder_edit";
+		// 标准围栏 notepilot-edit；向后兼容旧品牌 qoder-edit / qoder_edit
+		let isEditFence =
+			lang === "notepilot-edit" || lang === "qoder-edit" || lang === "qoder_edit";
 
-		// 语言名被写在块内首行的情况
+		// 语言名被写在块内首行的情况（新旧品牌均兼容）
 		const firstLine = body.split("\n", 1)[0].trim();
-		if (!isEditFence && /^qoder[-_ ]?edit$/i.test(firstLine)) {
+		if (!isEditFence && /^(notepilot|qoder)[-_ ]?edit$/i.test(firstLine)) {
 			body = body.slice(firstLine.length).trim();
+			isEditFence = true;
 		}
 
 		if (!isEditFence && !body.startsWith("{")) continue;
@@ -77,7 +80,7 @@ export function parseEditBlocks(text: string): ParsedEdit[] {
 			validateEdit(obj);
 			out.push({ raw: body, edit: obj, error: null });
 		} catch (e) {
-			// 只有显式 qoder-edit 围栏解析失败才报错展示
+			// 只有显式 notepilot-edit 围栏解析失败才报错展示
 			if (isEditFence) {
 				out.push({ raw: body, edit: null, error: (e as Error).message });
 			}
@@ -150,15 +153,15 @@ export function agentToolPrompt(app: App): string {
 
 	return [
 		"你当前处于 Agent 模式，具备修改本地文件的能力。当用户要求创建、修改或更新笔记时，请在文字回复之后输出一个或多个编辑块。",
-		"编辑块格式必须严格为：三个反引号 + qoder-edit 作为围栏语言，块内为单行或多行的严格 JSON。示例：",
-		"```qoder-edit",
+		"编辑块格式必须严格为：三个反引号 + notepilot-edit 作为围栏语言，块内为单行或多行的严格 JSON。示例：",
+		"```notepilot-edit",
 		'{"action":"replace","path":"笔记.md","search":"被替换的原文","replace":"新内容"}',
 		"```",
 		"三种 action：",
 		'- 替换文件中的部分内容：{"action":"replace","path":"笔记.md","search":"被替换的原文（必须与文件内容完全一致）","replace":"新内容"}',
 		'- 创建新文件：{"action":"create","path":"目录/新文件.md","content":"完整内容"}',
 		'- 覆写整个文件：{"action":"write","path":"笔记.md","content":"完整内容"}',
-		"规则：围栏语言必须是 qoder-edit，不得改用 json 或其他语言；path 为相对库根目录的路径；JSON 必须合法且正确转义换行与引号；所有修改都会先展示给用户审批后才生效，因此可放心输出；能使用 replace 时优先使用 replace。",
+		"规则：围栏语言必须是 notepilot-edit，不得改用 json 或其他语言；path 为相对库根目录的路径；JSON 必须合法且正确转义换行与引号；所有修改都会先展示给用户审批后才生效，因此可放心输出；能使用 replace 时优先使用 replace。",
 		files.length > 0
 			? `当前库内的 Markdown 文件列表：\n${files.join("\n")}`
 			: "当前库内暂无 Markdown 文件。",

@@ -1,13 +1,13 @@
-# Qoder Clone for Obsidian
+# NotePilot for Obsidian
 
-仿 Qoder 的 AI 聊天助手 Obsidian 插件（Qoder Clone）：侧边栏对话面板、流式输出、多会话管理、BYOK（自带 API Key，支持三种协议：OpenAI 兼容 / Anthropic 原生 / Gemini 原生）。
+NotePilot：Obsidian 侧边栏 AI 聊天助手，支持对话面板、流式输出、多会话管理、BYOK（自带 API Key，支持三种协议：OpenAI 兼容 / Anthropic 原生 / Gemini 原生）。
 
 界面与交互设计参照开源项目 [Continue](https://github.com/continuedev/continue)（Apache 2.0），代码为独立实现。
 
 ## 功能特性
 
 - **登录系统**：支持 12 个服务商、三种协议——OpenAI 兼容（阿里云百炼 DashScope、OpenAI、DeepSeek、Moonshot Kimi、智谱 GLM、硅基流动、Ollama 本地、OpenRouter、Groq、自定义服务商）、Anthropic 原生（Claude）、Google Gemini 原生；登录时真实校验 API Key，登录态持久化，支持退出登录
-- **聊天面板**：仿 Qoder 界面 —— 欢迎页、推荐提问、模型下拉切换、底部输入盒、状态栏
+- **聊天面板**：欢迎页、推荐提问、模型下拉切换、底部输入盒、状态栏
 - **模型列表拉取**：模型下拉框旁的刷新按钮可直接从 API 获取该服务商的真实可用模型列表（登录成功后自动拉取）
 - **流式输出**：逐字流式回复，生成中可随时停止
 - **多会话管理**：会话历史列表（标题/消息数/时间），支持切换、重命名、导出为 Markdown、删除
@@ -17,7 +17,7 @@
 - **笔记上下文**：提问时自动附带当前打开笔记的内容（可开关、可设截断长度）
 - **代码块操作**：回复中的代码块支持一键复制、插入当前笔记
 - **Inline Chat**：编辑器选中文本 → 输入改写指令 → Diff 预览（绿加/红删）→ 接受后应用
-- **Rules 规则**：库根目录 `.qoder-rules/*.md` 中的规则自动注入对话，支持 frontmatter `alwaysApply: false` 关闭单条
+- **Rules 规则**：库根目录 `.notepilot-rules/*.md` 中的规则自动注入对话，支持 frontmatter `alwaysApply: false` 关闭单条
 - **Agent 文件修改**：开启 Agent 模式后，AI 可输出文件编辑指令（创建/覆写/局部替换），以 Diff 审批卡片展示，用户确认后才会真正修改库内文件
 
 ## 安装
@@ -27,10 +27,10 @@
 将本仓库的 `main.js`、`manifest.json`、`styles.css`、`versions.json` 复制到：
 
 ```
-<你的库>/.obsidian/plugins/obsidian-qoder-chat/
+<你的库>/.obsidian/plugins/obsidian-notepilot/
 ```
 
-然后在 Obsidian 中：设置 → 第三方插件 → 关闭安全模式 → 启用 Qoder Clone。
+然后在 Obsidian 中：设置 → 第三方插件 → 关闭安全模式 → 启用 NotePilot。
 
 ### 从源码构建
 
@@ -54,7 +54,7 @@ npm run build
 
 ### Rules 示例
 
-在库根目录创建 `.qoder-rules/style.md`：
+在库根目录创建 `.notepilot-rules/style.md`：
 
 ```markdown
 ---
