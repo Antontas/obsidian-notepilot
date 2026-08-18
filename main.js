@@ -31,55 +31,85 @@ var PROVIDER_PRESETS = {
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen3.7-plus",
     label: "\u963F\u91CC\u4E91\u767E\u70BC DashScope",
-    keyUrl: "https://bailian.console.aliyun.com/"
+    keyUrl: "https://bailian.console.aliyun.com/",
+    format: "openai"
   },
   openai: {
     baseUrl: "https://api.openai.com/v1",
     model: "gpt-4o-mini",
     label: "OpenAI",
-    keyUrl: "https://platform.openai.com/api-keys"
+    keyUrl: "https://platform.openai.com/api-keys",
+    format: "openai"
   },
   deepseek: {
     baseUrl: "https://api.deepseek.com/v1",
     model: "deepseek-chat",
     label: "DeepSeek \u6DF1\u5EA6\u6C42\u7D22",
-    keyUrl: "https://platform.deepseek.com/"
+    keyUrl: "https://platform.deepseek.com/",
+    format: "openai"
   },
   moonshot: {
     baseUrl: "https://api.moonshot.cn/v1",
     model: "moonshot-v1-8k",
     label: "Moonshot Kimi",
-    keyUrl: "https://platform.moonshot.cn/"
+    keyUrl: "https://platform.moonshot.cn/",
+    format: "openai"
   },
   zhipu: {
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
     model: "glm-4-flash",
     label: "\u667A\u8C31 GLM",
-    keyUrl: "https://open.bigmodel.cn/"
+    keyUrl: "https://open.bigmodel.cn/",
+    format: "openai"
   },
   siliconflow: {
     baseUrl: "https://api.siliconflow.cn/v1",
     model: "deepseek-ai/DeepSeek-V3",
     label: "\u7845\u57FA\u6D41\u52A8 SiliconFlow",
-    keyUrl: "https://cloud.siliconflow.cn/"
+    keyUrl: "https://cloud.siliconflow.cn/",
+    format: "openai"
   },
   ollama: {
     baseUrl: "http://localhost:11434/v1",
     model: "llama3.2",
     label: "Ollama \u672C\u5730\u670D\u52A1",
-    keyUrl: "https://ollama.com/"
+    keyUrl: "https://ollama.com/",
+    format: "openai"
   },
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
     model: "anthropic/claude-3.5-sonnet",
     label: "OpenRouter",
-    keyUrl: "https://openrouter.ai/keys"
+    keyUrl: "https://openrouter.ai/keys",
+    format: "openai"
   },
   groq: {
     baseUrl: "https://api.groq.com/openai/v1",
     model: "llama-3.3-70b-versatile",
     label: "Groq",
-    keyUrl: "https://console.groq.com/keys"
+    keyUrl: "https://console.groq.com/keys",
+    format: "openai"
+  },
+  custom: {
+    baseUrl: "",
+    model: "",
+    label: "\u81EA\u5B9A\u4E49\u670D\u52A1\u5546\uFF08OpenAI \u517C\u5BB9\uFF09",
+    keyUrl: "",
+    format: "openai"
+  },
+  anthropic: {
+    baseUrl: "https://api.anthropic.com",
+    model: "claude-sonnet-4-5",
+    label: "Anthropic Claude\uFF08\u539F\u751F\u534F\u8BAE\uFF09",
+    keyUrl: "https://console.anthropic.com/",
+    format: "anthropic"
+  },
+  gemini: {
+    baseUrl: "https://generativelanguage.googleapis.com",
+    model: "gemini-2.5-flash",
+    label: "Google Gemini\uFF08\u539F\u751F\u534F\u8BAE\uFF09",
+    keyUrl: "https://aistudio.google.com/apikey",
+    format: "gemini"
   }
 };
 var PROVIDER_MODELS = {
@@ -120,6 +150,19 @@ var PROVIDER_MODELS = {
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
     "mixtral-8x7b-32768"
+  ],
+  custom: [],
+  anthropic: [
+    "claude-sonnet-4-5",
+    "claude-opus-4-1",
+    "claude-3-7-sonnet-latest",
+    "claude-3-5-haiku-latest"
+  ],
+  gemini: [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite"
   ]
 };
 var SUGGESTIONS = [
@@ -185,7 +228,20 @@ function formatDate(ts) {
 }
 
 // src/llm.ts
+function apiFormatOf(settings) {
+  return PROVIDER_PRESETS[settings.provider].format;
+}
 async function verifyApiKey(settings) {
+  switch (apiFormatOf(settings)) {
+    case "anthropic":
+      return verifyAnthropic(settings);
+    case "gemini":
+      return verifyGemini(settings);
+    default:
+      return verifyOpenAI(settings);
+  }
+}
+async function verifyOpenAI(settings) {
   var _a;
   const base = settings.baseUrl.replace(/\/+$/, "");
   const headers = {
@@ -232,10 +288,66 @@ async function verifyApiKey(settings) {
     return { ok: false, message: `\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}` };
   }
 }
+async function verifyAnthropic(settings) {
+  var _a;
+  const base = settings.baseUrl.replace(/\/+$/, "");
+  const headers = {
+    "x-api-key": settings.apiKey,
+    "anthropic-version": "2023-06-01"
+  };
+  try {
+    const resp = await fetch(base + "/v1/models", { headers });
+    if (resp.ok) return { ok: true, message: "\u767B\u5F55\u6210\u529F" };
+    if (resp.status === 401 || resp.status === 403) {
+      return { ok: false, message: `API Key \u65E0\u6548\u6216\u65E0\u6743\u8BBF\u95EE\uFF08${resp.status}\uFF09` };
+    }
+    let detail = "";
+    try {
+      const body = await resp.json();
+      detail = ((_a = body == null ? void 0 : body.error) == null ? void 0 : _a.message) || "";
+    } catch (e) {
+    }
+    return { ok: false, message: `\u9A8C\u8BC1\u5931\u8D25\uFF08HTTP ${resp.status}\uFF09${detail ? "\uFF1A" + detail : ""}` };
+  } catch (e) {
+    return { ok: false, message: `\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}` };
+  }
+}
+async function verifyGemini(settings) {
+  var _a;
+  const base = settings.baseUrl.replace(/\/+$/, "");
+  try {
+    const resp = await fetch(
+      base + "/v1beta/models?key=" + encodeURIComponent(settings.apiKey)
+    );
+    if (resp.ok) return { ok: true, message: "\u767B\u5F55\u6210\u529F" };
+    if (resp.status === 400 || resp.status === 401 || resp.status === 403) {
+      return { ok: false, message: `API Key \u65E0\u6548\uFF08HTTP ${resp.status}\uFF09` };
+    }
+    let detail = "";
+    try {
+      const body = await resp.json();
+      detail = ((_a = body == null ? void 0 : body.error) == null ? void 0 : _a.message) || "";
+    } catch (e) {
+    }
+    return { ok: false, message: `\u9A8C\u8BC1\u5931\u8D25\uFF08HTTP ${resp.status}\uFF09${detail ? "\uFF1A" + detail : ""}` };
+  } catch (e) {
+    return { ok: false, message: `\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}` };
+  }
+}
 function chatCompletion(settings, messages, callbacks, onDone) {
+  switch (apiFormatOf(settings)) {
+    case "anthropic":
+      return anthropicCompletion(settings, messages, callbacks, onDone);
+    case "gemini":
+      return geminiCompletion(settings, messages, callbacks, onDone);
+    default:
+      return openAICompletion(settings, messages, callbacks, onDone);
+  }
+}
+function openAICompletion(settings, messages, callbacks, onDone) {
   const controller = new AbortController();
   const run = async () => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const url = settings.baseUrl.replace(/\/+$/, "") + "/chat/completions";
     let resp;
     try {
@@ -262,21 +374,14 @@ function chatCompletion(settings, messages, callbacks, onDone) {
       return;
     }
     if (!resp.ok) {
-      let detail = "";
-      try {
-        const body = await resp.json();
-        detail = ((_a = body == null ? void 0 : body.error) == null ? void 0 : _a.message) || JSON.stringify(body);
-      } catch (e) {
-        detail = await resp.text().catch(() => "");
-      }
-      callbacks.onError(`\u63A5\u53E3\u9519\u8BEF ${resp.status}\uFF1A${detail}`);
+      callbacks.onError(`\u63A5\u53E3\u9519\u8BEF ${resp.status}\uFF1A${await errorDetail(resp)}`);
       onDone();
       return;
     }
     if (!settings.stream || !resp.body) {
       try {
         const data = await resp.json();
-        const text = (_e = (_d = (_c = (_b = data == null ? void 0 : data.choices) == null ? void 0 : _b[0]) == null ? void 0 : _c.message) == null ? void 0 : _d.content) != null ? _e : "(\u7A7A\u56DE\u590D)";
+        const text = (_d = (_c = (_b = (_a = data == null ? void 0 : data.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.message) == null ? void 0 : _c.content) != null ? _d : "(\u7A7A\u56DE\u590D)";
         callbacks.onToken(text);
       } catch (e) {
         callbacks.onError(`\u89E3\u6790\u54CD\u5E94\u5931\u8D25\uFF1A${e.message}`);
@@ -293,7 +398,7 @@ function chatCompletion(settings, messages, callbacks, onDone) {
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-        buffer = (_f = lines.pop()) != null ? _f : "";
+        buffer = (_e = lines.pop()) != null ? _e : "";
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed.startsWith("data:")) continue;
@@ -301,7 +406,7 @@ function chatCompletion(settings, messages, callbacks, onDone) {
           if (payload === "[DONE]") continue;
           try {
             const json = JSON.parse(payload);
-            const delta = (_i = (_h = (_g = json == null ? void 0 : json.choices) == null ? void 0 : _g[0]) == null ? void 0 : _h.delta) == null ? void 0 : _i.content;
+            const delta = (_h = (_g = (_f = json == null ? void 0 : json.choices) == null ? void 0 : _f[0]) == null ? void 0 : _g.delta) == null ? void 0 : _h.content;
             if (typeof delta === "string" && delta.length > 0) {
               callbacks.onToken(delta);
             }
@@ -318,6 +423,205 @@ function chatCompletion(settings, messages, callbacks, onDone) {
   };
   run();
   return controller;
+}
+function anthropicCompletion(settings, messages, callbacks, onDone) {
+  const controller = new AbortController();
+  const run = async () => {
+    var _a, _b, _c;
+    const base = settings.baseUrl.replace(/\/+$/, "");
+    const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+    const turns = normalizeTurns(messages.filter((m) => m.role !== "system"));
+    let resp;
+    try {
+      resp = await fetch(base + "/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01"
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          max_tokens: settings.maxTokens,
+          temperature: settings.temperature,
+          ...system ? { system } : {},
+          messages: turns,
+          stream: settings.stream
+        })
+      });
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        callbacks.onError(`\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}`);
+      }
+      onDone();
+      return;
+    }
+    if (!resp.ok) {
+      callbacks.onError(`\u63A5\u53E3\u9519\u8BEF ${resp.status}\uFF1A${await errorDetail(resp)}`);
+      onDone();
+      return;
+    }
+    if (!settings.stream || !resp.body) {
+      try {
+        const data = await resp.json();
+        const blocks = (_a = data == null ? void 0 : data.content) != null ? _a : [];
+        const text = blocks.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join("");
+        callbacks.onToken(text || "(\u7A7A\u56DE\u590D)");
+      } catch (e) {
+        callbacks.onError(`\u89E3\u6790\u54CD\u5E94\u5931\u8D25\uFF1A${e.message}`);
+      }
+      onDone();
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    try {
+      for (; ; ) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = (_b = lines.pop()) != null ? _b : "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          try {
+            const json = JSON.parse(payload);
+            const delta = (_c = json == null ? void 0 : json.delta) == null ? void 0 : _c.text;
+            if ((json == null ? void 0 : json.type) === "content_block_delta" && typeof delta === "string" && delta.length > 0) {
+              callbacks.onToken(delta);
+            }
+          } catch (e) {
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        callbacks.onError(`\u6D41\u5F0F\u8BFB\u53D6\u4E2D\u65AD\uFF1A${e.message}`);
+      }
+    }
+    onDone();
+  };
+  run();
+  return controller;
+}
+function geminiCompletion(settings, messages, callbacks, onDone) {
+  const controller = new AbortController();
+  const run = async () => {
+    var _a;
+    const base = settings.baseUrl.replace(/\/+$/, "");
+    const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+    const contents = normalizeTurns(messages.filter((m) => m.role !== "system")).map(
+      (m) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }]
+      })
+    );
+    const action = settings.stream ? "streamGenerateContent" : "generateContent";
+    const query = `?key=${encodeURIComponent(settings.apiKey)}${settings.stream ? "&alt=sse" : ""}`;
+    const url = `${base}/v1beta/models/${encodeURIComponent(settings.model)}:${action}${query}`;
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...system ? { systemInstruction: { parts: [{ text: system }] } } : {},
+          contents,
+          generationConfig: {
+            temperature: settings.temperature,
+            maxOutputTokens: settings.maxTokens
+          }
+        })
+      });
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        callbacks.onError(`\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}`);
+      }
+      onDone();
+      return;
+    }
+    if (!resp.ok) {
+      callbacks.onError(`\u63A5\u53E3\u9519\u8BEF ${resp.status}\uFF1A${await errorDetail(resp)}`);
+      onDone();
+      return;
+    }
+    if (!settings.stream || !resp.body) {
+      try {
+        const data = await resp.json();
+        callbacks.onToken(geminiExtractText(data) || "(\u7A7A\u56DE\u590D)");
+      } catch (e) {
+        callbacks.onError(`\u89E3\u6790\u54CD\u5E94\u5931\u8D25\uFF1A${e.message}`);
+      }
+      onDone();
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    try {
+      for (; ; ) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = (_a = lines.pop()) != null ? _a : "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const payload = trimmed.slice(5).trim();
+          try {
+            const json = JSON.parse(payload);
+            const text = geminiExtractText(json);
+            if (text.length > 0) callbacks.onToken(text);
+          } catch (e) {
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name !== "AbortError") {
+        callbacks.onError(`\u6D41\u5F0F\u8BFB\u53D6\u4E2D\u65AD\uFF1A${e.message}`);
+      }
+    }
+    onDone();
+  };
+  run();
+  return controller;
+}
+async function errorDetail(resp) {
+  var _a;
+  try {
+    const body = await resp.json();
+    return ((_a = body == null ? void 0 : body.error) == null ? void 0 : _a.message) || JSON.stringify(body);
+  } catch (e) {
+    return await resp.text().catch(() => "");
+  }
+}
+function normalizeTurns(messages) {
+  var _a;
+  const out = [];
+  for (const m of messages) {
+    const last = out[out.length - 1];
+    if (last && last.role === m.role) {
+      last.content += "\n\n" + m.content;
+    } else {
+      out.push({ role: m.role, content: m.content });
+    }
+  }
+  if (((_a = out[0]) == null ? void 0 : _a.role) !== "user") {
+    out.unshift({ role: "user", content: "\uFF08\u7EE7\u7EED\uFF09" });
+  }
+  return out;
+}
+function geminiExtractText(json) {
+  var _a, _b, _c, _d;
+  const data = json;
+  const parts = (_d = (_c = (_b = (_a = data == null ? void 0 : data.candidates) == null ? void 0 : _a[0]) == null ? void 0 : _b.content) == null ? void 0 : _c.parts) != null ? _d : [];
+  return parts.filter((p) => typeof (p == null ? void 0 : p.text) === "string").map((p) => p == null ? void 0 : p.text).join("");
 }
 
 // src/diff.ts
@@ -595,17 +899,31 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       cls: "qoder-login-link",
       text: "\u83B7\u53D6 API Key \u2192"
     });
+    const keyPlaceholders = {
+      ollama: "\u672C\u5730\u670D\u52A1\u65E0\u9700\u5BC6\u94A5\uFF0C\u53EF\u7559\u7A7A",
+      custom: "API Key\uFF08\u81EA\u5B9A\u4E49\u670D\u52A1\u53EF\u7559\u7A7A\uFF09",
+      anthropic: "\u8F93\u5165 Anthropic API Key\uFF08sk-ant-...\uFF09",
+      gemini: "\u8F93\u5165 Google AI Studio API Key\uFF08AIza...\uFF09"
+    };
     const applyProvider = (p) => {
+      var _a;
       const preset = PROVIDER_PRESETS[p];
       this.plugin.settings.provider = p;
-      this.plugin.settings.baseUrl = preset.baseUrl;
-      this.plugin.settings.model = preset.model;
-      urlInput.value = preset.baseUrl;
+      if (preset.baseUrl) {
+        this.plugin.settings.baseUrl = preset.baseUrl;
+        urlInput.value = preset.baseUrl;
+      }
+      if (preset.model) this.plugin.settings.model = preset.model;
       keyInput.setAttribute(
         "placeholder",
-        p === "ollama" ? "\u672C\u5730\u670D\u52A1\u65E0\u9700\u5BC6\u94A5\uFF0C\u53EF\u7559\u7A7A" : `\u8F93\u5165 ${preset.label} API Key\uFF08sk-...\uFF09`
+        (_a = keyPlaceholders[p]) != null ? _a : `\u8F93\u5165 ${preset.label} API Key\uFF08sk-...\uFF09`
       );
-      link.setText(`\u524D\u5F80 ${preset.label} \u83B7\u53D6 API Key \u2192`);
+      if (preset.keyUrl) {
+        link.style.display = "";
+        link.setText(`\u524D\u5F80 ${preset.label} \u83B7\u53D6 API Key \u2192`);
+      } else {
+        link.style.display = "none";
+      }
     };
     applyProvider(this.plugin.settings.provider);
     providerSelect.addEventListener("change", () => {
@@ -619,14 +937,14 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     const doLogin = async () => {
       const provider = providerSelect.value;
       const key = keyInput.value.trim();
-      if (!key && provider !== "ollama") {
+      if (!key && provider !== "ollama" && provider !== "custom") {
         statusEl.setText("\u8BF7\u8F93\u5165 API Key");
         return;
       }
       loginBtn.disabled = true;
       statusEl.setText("\u6B63\u5728\u9A8C\u8BC1\u51ED\u8BC1\u2026");
       this.plugin.settings.provider = provider;
-      this.plugin.settings.apiKey = key || "ollama";
+      this.plugin.settings.apiKey = key || (provider === "ollama" ? "ollama" : "custom");
       const url = urlInput.value.trim();
       if (url) this.plugin.settings.baseUrl = url;
       const result = await verifyApiKey(this.plugin.settings);
@@ -1902,13 +2220,20 @@ var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
       return dropdown.addOptions(options).setValue(this.plugin.settings.provider).onChange(async (value) => {
         this.plugin.settings.provider = value;
         const preset = PROVIDER_PRESETS[value];
-        this.plugin.settings.baseUrl = preset.baseUrl;
-        this.plugin.settings.model = preset.model;
+        if (preset.baseUrl) this.plugin.settings.baseUrl = preset.baseUrl;
+        if (preset.model) this.plugin.settings.model = preset.model;
         await this.plugin.saveAll();
         this.display();
       });
     });
-    new import_obsidian3.Setting(containerEl).setName("Base URL").setDesc("OpenAI \u517C\u5BB9\u63A5\u53E3\u5730\u5740").addText(
+    const formatLabels = {
+      openai: "OpenAI \u517C\u5BB9\u534F\u8BAE",
+      anthropic: "Anthropic \u539F\u751F\u534F\u8BAE",
+      gemini: "Gemini \u539F\u751F\u534F\u8BAE"
+    };
+    new import_obsidian3.Setting(containerEl).setName("Base URL").setDesc(
+      `\u63A5\u53E3\u5730\u5740\uFF08\u5F53\u524D\u534F\u8BAE\uFF1A${formatLabels[PROVIDER_PRESETS[this.plugin.settings.provider].format]}\uFF09`
+    ).addText(
       (text) => text.setPlaceholder("https://.../v1").setValue(this.plugin.settings.baseUrl).onChange(async (value) => {
         this.plugin.settings.baseUrl = value.trim();
         await this.plugin.saveAll();
@@ -1921,7 +2246,9 @@ var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.saveAll();
       });
     });
-    new import_obsidian3.Setting(containerEl).setName("\u6A21\u578B").setDesc("\u4F8B\u5982 qwen3.7-plus / gpt-4o-mini").addText(
+    new import_obsidian3.Setting(containerEl).setName("\u6A21\u578B").setDesc(
+      this.plugin.settings.provider === "custom" ? "\u81EA\u5B9A\u4E49\u670D\u52A1\u5546\u7684\u6A21\u578B\u540D\u79F0\uFF0C\u8BF7\u624B\u52A8\u586B\u5199" : "\u4F8B\u5982 qwen3.7-plus / gpt-4o-mini / gemini-2.5-flash"
+    ).addText(
       (text) => text.setPlaceholder("\u6A21\u578B\u540D\u79F0").setValue(this.plugin.settings.model).onChange(async (value) => {
         this.plugin.settings.model = value.trim();
         await this.plugin.saveAll();

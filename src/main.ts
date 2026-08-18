@@ -18,7 +18,7 @@ import {
 	QoderChatSettings,
 	StoredData,
 } from "./settings";
-import type { Provider } from "./settings";
+import type { ApiFormat, Provider } from "./settings";
 import {
 	ChatSession,
 	createSession,
@@ -509,16 +509,24 @@ class QoderChatSettingTab extends PluginSettingTab {
 					.onChange(async (value: Provider) => {
 						this.plugin.settings.provider = value;
 						const preset = PROVIDER_PRESETS[value];
-						this.plugin.settings.baseUrl = preset.baseUrl;
-						this.plugin.settings.model = preset.model;
+						// 自定义服务商不覆盖用户已填的地址与模型
+						if (preset.baseUrl) this.plugin.settings.baseUrl = preset.baseUrl;
+						if (preset.model) this.plugin.settings.model = preset.model;
 						await this.plugin.saveAll();
 						this.display();
 					});
 			});
 
+		const formatLabels: Record<ApiFormat, string> = {
+			openai: "OpenAI 兼容协议",
+			anthropic: "Anthropic 原生协议",
+			gemini: "Gemini 原生协议",
+		};
 		new Setting(containerEl)
 			.setName("Base URL")
-			.setDesc("OpenAI 兼容接口地址")
+			.setDesc(
+				`接口地址（当前协议：${formatLabels[PROVIDER_PRESETS[this.plugin.settings.provider].format]}）`
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("https://.../v1")
@@ -545,7 +553,11 @@ class QoderChatSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("模型")
-			.setDesc("例如 qwen3.7-plus / gpt-4o-mini")
+			.setDesc(
+				this.plugin.settings.provider === "custom"
+					? "自定义服务商的模型名称，请手动填写"
+					: "例如 qwen3.7-plus / gpt-4o-mini / gemini-2.5-flash"
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("模型名称")

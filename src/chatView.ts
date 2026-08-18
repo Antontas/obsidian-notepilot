@@ -141,20 +141,34 @@ export class QoderChatView extends ItemView {
 			text: "获取 API Key →",
 		});
 
+		// 各服务商的 Key 占位提示（未列出的用默认文案）
+		const keyPlaceholders: Partial<Record<Provider, string>> = {
+			ollama: "本地服务无需密钥，可留空",
+			custom: "API Key（自定义服务可留空）",
+			anthropic: "输入 Anthropic API Key（sk-ant-...）",
+			gemini: "输入 Google AI Studio API Key（AIza...）",
+		};
+
 		// 切换服务商：同步 Base URL、默认模型、占位提示与获取链接
 		const applyProvider = (p: Provider) => {
 			const preset = PROVIDER_PRESETS[p];
 			this.plugin.settings.provider = p;
-			this.plugin.settings.baseUrl = preset.baseUrl;
-			this.plugin.settings.model = preset.model;
-			urlInput.value = preset.baseUrl;
+			// 自定义服务商不覆盖用户已填的地址与模型
+			if (preset.baseUrl) {
+				this.plugin.settings.baseUrl = preset.baseUrl;
+				urlInput.value = preset.baseUrl;
+			}
+			if (preset.model) this.plugin.settings.model = preset.model;
 			keyInput.setAttribute(
 				"placeholder",
-				p === "ollama"
-					? "本地服务无需密钥，可留空"
-					: `输入 ${preset.label} API Key（sk-...）`
+				keyPlaceholders[p] ?? `输入 ${preset.label} API Key（sk-...）`
 			);
-			link.setText(`前往 ${preset.label} 获取 API Key →`);
+			if (preset.keyUrl) {
+				link.style.display = "";
+				link.setText(`前往 ${preset.label} 获取 API Key →`);
+			} else {
+				link.style.display = "none";
+			}
 		};
 		applyProvider(this.plugin.settings.provider);
 		providerSelect.addEventListener("change", () => {
@@ -170,15 +184,16 @@ export class QoderChatView extends ItemView {
 		const doLogin = async () => {
 			const provider = providerSelect.value as Provider;
 			const key = keyInput.value.trim();
-			if (!key && provider !== "ollama") {
+			if (!key && provider !== "ollama" && provider !== "custom") {
 				statusEl.setText("请输入 API Key");
 				return;
 			}
 			loginBtn.disabled = true;
 			statusEl.setText("正在验证凭证…");
 			this.plugin.settings.provider = provider;
-			// Ollama 本地服务无需密钥
-			this.plugin.settings.apiKey = key || "ollama";
+			// Ollama 本地服务与自定义服务可无需密钥
+			this.plugin.settings.apiKey =
+				key || (provider === "ollama" ? "ollama" : "custom");
 			const url = urlInput.value.trim();
 			if (url) this.plugin.settings.baseUrl = url;
 			const result = await verifyApiKey(this.plugin.settings);

@@ -8,7 +8,7 @@ export interface StoredData {
 	currentSessionId: string;
 }
 
-/** 支持的服务商（均为 OpenAI 兼容协议） */
+/** 支持的服务商（OpenAI 兼容 + Anthropic / Gemini 原生协议） */
 export type Provider =
 	| "openai"
 	| "dashscope"
@@ -18,7 +18,13 @@ export type Provider =
 	| "siliconflow"
 	| "ollama"
 	| "openrouter"
-	| "groq";
+	| "groq"
+	| "custom"
+	| "anthropic"
+	| "gemini";
+
+/** API 协议格式：OpenAI 兼容 / Anthropic 原生 / Gemini 原生 */
+export type ApiFormat = "openai" | "anthropic" | "gemini";
 
 export interface QoderChatSettings {
 	provider: Provider;
@@ -39,8 +45,10 @@ export interface ProviderPreset {
 	baseUrl: string;
 	model: string;
 	label: string;
-	/** 获取 API Key 的页面（Ollama 本地服务无需密钥） */
+	/** 获取 API Key 的页面（本地/自定义服务可留空） */
 	keyUrl: string;
+	/** 协议格式 */
+	format: ApiFormat;
 }
 
 export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
@@ -49,54 +57,84 @@ export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
 		model: "qwen3.7-plus",
 		label: "阿里云百炼 DashScope",
 		keyUrl: "https://bailian.console.aliyun.com/",
+		format: "openai",
 	},
 	openai: {
 		baseUrl: "https://api.openai.com/v1",
 		model: "gpt-4o-mini",
 		label: "OpenAI",
 		keyUrl: "https://platform.openai.com/api-keys",
+		format: "openai",
 	},
 	deepseek: {
 		baseUrl: "https://api.deepseek.com/v1",
 		model: "deepseek-chat",
 		label: "DeepSeek 深度求索",
 		keyUrl: "https://platform.deepseek.com/",
+		format: "openai",
 	},
 	moonshot: {
 		baseUrl: "https://api.moonshot.cn/v1",
 		model: "moonshot-v1-8k",
 		label: "Moonshot Kimi",
 		keyUrl: "https://platform.moonshot.cn/",
+		format: "openai",
 	},
 	zhipu: {
 		baseUrl: "https://open.bigmodel.cn/api/paas/v4",
 		model: "glm-4-flash",
 		label: "智谱 GLM",
 		keyUrl: "https://open.bigmodel.cn/",
+		format: "openai",
 	},
 	siliconflow: {
 		baseUrl: "https://api.siliconflow.cn/v1",
 		model: "deepseek-ai/DeepSeek-V3",
 		label: "硅基流动 SiliconFlow",
 		keyUrl: "https://cloud.siliconflow.cn/",
+		format: "openai",
 	},
 	ollama: {
 		baseUrl: "http://localhost:11434/v1",
 		model: "llama3.2",
 		label: "Ollama 本地服务",
 		keyUrl: "https://ollama.com/",
+		format: "openai",
 	},
 	openrouter: {
 		baseUrl: "https://openrouter.ai/api/v1",
 		model: "anthropic/claude-3.5-sonnet",
 		label: "OpenRouter",
 		keyUrl: "https://openrouter.ai/keys",
+		format: "openai",
 	},
 	groq: {
 		baseUrl: "https://api.groq.com/openai/v1",
 		model: "llama-3.3-70b-versatile",
 		label: "Groq",
 		keyUrl: "https://console.groq.com/keys",
+		format: "openai",
+	},
+	custom: {
+		baseUrl: "",
+		model: "",
+		label: "自定义服务商（OpenAI 兼容）",
+		keyUrl: "",
+		format: "openai",
+	},
+	anthropic: {
+		baseUrl: "https://api.anthropic.com",
+		model: "claude-sonnet-4-5",
+		label: "Anthropic Claude（原生协议）",
+		keyUrl: "https://console.anthropic.com/",
+		format: "anthropic",
+	},
+	gemini: {
+		baseUrl: "https://generativelanguage.googleapis.com",
+		model: "gemini-2.5-flash",
+		label: "Google Gemini（原生协议）",
+		keyUrl: "https://aistudio.google.com/apikey",
+		format: "gemini",
 	},
 };
 
@@ -138,6 +176,19 @@ export const PROVIDER_MODELS: Record<Provider, string[]> = {
 		"llama-3.3-70b-versatile",
 		"llama-3.1-8b-instant",
 		"mixtral-8x7b-32768",
+	],
+	custom: [],
+	anthropic: [
+		"claude-sonnet-4-5",
+		"claude-opus-4-1",
+		"claude-3-7-sonnet-latest",
+		"claude-3-5-haiku-latest",
+	],
+	gemini: [
+		"gemini-2.5-flash",
+		"gemini-2.5-pro",
+		"gemini-2.0-flash",
+		"gemini-2.0-flash-lite",
 	],
 };
 
