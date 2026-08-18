@@ -11,6 +11,15 @@ import {
 	PluginSettingTab,
 	Setting,
 } from "obsidian";
+import type { Range } from "@codemirror/state";
+import {
+	Decoration,
+	DecorationSet,
+	EditorView,
+	ViewPlugin,
+	ViewUpdate,
+	WidgetType,
+} from "@codemirror/view";
 import {
 	DEFAULT_SETTINGS,
 	PROVIDER_PRESETS,
@@ -25,6 +34,68 @@ import {
 import { chatCompletion, LlmRequestMessage } from "./llm";
 import { lineDiff } from "./diff";
 import { QoderChatView, VIEW_TYPE_QODER_CHAT } from "./chatView";
+
+// ============ 划词自动识别：选区旁浮动「问问 AI」按钮（CM6 扩展） ============
+
+class SelectionAskWidget extends WidgetType {
+	constructor(
+		private readonly text: string,
+		private readonly plugin: QoderChatPlugin
+	) {
+		super();
+	}
+
+	toDOM(): HTMLElement {
+		const btn = document.createElement("button");
+		btn.addClass("qoder-ask-widget");
+		btn.setText("问问 AI");
+		btn.setAttribute("aria-label", "划词提问：就选中文本提问");
+		// 阻止编辑器抢占焦点，保持选区不消失
+		btn.addEventListener("mousedown", (e) => e.preventDefault());
+		btn.addEventListener("click", (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			void this.plugin.askSelection(this.text);
+		});
+		return btn;
+	}
+}
+
+function selectionAskExtension(plugin: QoderChatPlugin) {
+	return ViewPlugin.fromClass(
+		class {
+			decorations: DecorationSet;
+
+			constructor(view: EditorView) {
+				this.decorations = this.build(view);
+			}
+
+			update(u: ViewUpdate) {
+				if (u.docChanged || u.selectionSet || u.focusChanged) {
+					this.decorations = this.build(u.view);
+				}
+			}
+
+			build(view: EditorView): DecorationSet {
+				const ranges: Range<Decoration>[] = [];
+				const sel = view.state.selection.main;
+				if (view.hasFocus && !sel.empty) {
+					const text = view.state.sliceDoc(sel.from, sel.to);
+					if (text.trim()) {
+						ranges.push(
+							Decoration.widget({
+								widget: new SelectionAskWidget(text, plugin),
+								side: 1,
+							}).range(sel.to)
+						);
+					}
+				}
+				return Decoration.set(ranges, true);
+			}
+		},
+		{ decorations: (v) => v.decorations }
+	);
+}
 
 export default class QoderChatPlugin extends Plugin {
 	settings: QoderChatSettings = DEFAULT_SETTINGS;
@@ -153,6 +224,9 @@ export default class QoderChatPlugin extends Plugin {
 		});
 
 		this.addSettingTab(new QoderChatSettingTab(this.app, this));
+
+		// 划词自动识别：选中文本时在选区末尾浮出「问问 AI」按钮
+		this.registerEditorExtension(selectionAskExtension(this));
 	}
 
 	updateStatusBar(): void {

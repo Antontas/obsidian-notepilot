@@ -23,6 +23,7 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian3 = require("obsidian");
+var import_view = require("@codemirror/view");
 
 // src/settings.ts
 var PROVIDER_PRESETS = {
@@ -1353,6 +1354,57 @@ ${quoted}
 };
 
 // src/main.ts
+var SelectionAskWidget = class extends import_view.WidgetType {
+  constructor(text, plugin) {
+    super();
+    this.text = text;
+    this.plugin = plugin;
+  }
+  toDOM() {
+    const btn = document.createElement("button");
+    btn.addClass("qoder-ask-widget");
+    btn.setText("\u95EE\u95EE AI");
+    btn.setAttribute("aria-label", "\u5212\u8BCD\u63D0\u95EE\uFF1A\u5C31\u9009\u4E2D\u6587\u672C\u63D0\u95EE");
+    btn.addEventListener("mousedown", (e) => e.preventDefault());
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      void this.plugin.askSelection(this.text);
+    });
+    return btn;
+  }
+};
+function selectionAskExtension(plugin) {
+  return import_view.ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.decorations = this.build(view);
+      }
+      update(u) {
+        if (u.docChanged || u.selectionSet || u.focusChanged) {
+          this.decorations = this.build(u.view);
+        }
+      }
+      build(view) {
+        const ranges = [];
+        const sel = view.state.selection.main;
+        if (view.hasFocus && !sel.empty) {
+          const text = view.state.sliceDoc(sel.from, sel.to);
+          if (text.trim()) {
+            ranges.push(
+              import_view.Decoration.widget({
+                widget: new SelectionAskWidget(text, plugin),
+                side: 1
+              }).range(sel.to)
+            );
+          }
+        }
+        return import_view.Decoration.set(ranges, true);
+      }
+    },
+    { decorations: (v) => v.decorations }
+  );
+}
 var QoderChatPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
@@ -1461,6 +1513,7 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
       }
     });
     this.addSettingTab(new QoderChatSettingTab(this.app, this));
+    this.registerEditorExtension(selectionAskExtension(this));
   }
   updateStatusBar() {
     if (!this.statusBarEl) return;
