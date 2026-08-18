@@ -444,6 +444,8 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.popupItems = [];
     this.popupIndex = 0;
     this.attachedFiles = [];
+    this.quotedText = null;
+    this.externalFiles = [];
     this.abortController = null;
     this.generating = false;
     this.plugin = plugin;
@@ -709,9 +711,21 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     this.inputEl = inputBox.createEl("textarea", {
       cls: "qoder-chat-input",
       attr: {
-        placeholder: "\u63D0\u95EE\u2026\uFF08@ \u5F15\u7528\u7B14\u8BB0\uFF0CEnter \u53D1\u9001\uFF09",
+        placeholder: "\u63D0\u95EE\u2026\uFF08@ \u5F15\u7528\u7B14\u8BB0\uFF0C\u62D6\u5165\u6587\u4EF6\u9644\u52A0\uFF0CEnter \u53D1\u9001\uFF09",
         rows: "2"
       }
+    });
+    this.registerDomEvent(inputBox, "dragover", (evt) => {
+      evt.preventDefault();
+      if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
+      inputBox.addClass("qoder-dragover");
+    });
+    this.registerDomEvent(inputBox, "dragleave", () => {
+      inputBox.removeClass("qoder-dragover");
+    });
+    this.registerDomEvent(inputBox, "drop", (evt) => {
+      inputBox.removeClass("qoder-dragover");
+      void this.onDropFiles(evt);
     });
     const toolbar = inputBox.createDiv({ cls: "qoder-input-toolbar" });
     const modelSelect = toolbar.createEl("select", {
@@ -1077,12 +1091,34 @@ var QoderChatView = class extends import_obsidian2.ItemView {
   }
   renderChips() {
     var _a, _b;
+    if (!this.chipsEl) return;
     this.chipsEl.empty();
-    if (this.attachedFiles.length === 0) {
+    const hasAny = this.attachedFiles.length > 0 || this.quotedText !== null || this.externalFiles.length > 0;
+    if (!hasAny) {
       this.chipsEl.style.display = "none";
       return;
     }
     this.chipsEl.style.display = "";
+    if (this.quotedText !== null) {
+      const q = this.quotedText;
+      const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+      chip.createSpan({ text: `\u{1F4CB} \u5212\u8BCD\u9009\u4E2D\uFF08${q.length} \u5B57\uFF09` });
+      chip.setAttribute("title", q.slice(0, 200));
+      const x = chip.createSpan({ cls: "qoder-chip-x", text: "\xD7" });
+      x.addEventListener("click", () => {
+        this.quotedText = null;
+        this.renderChips();
+      });
+    }
+    for (const ef of this.externalFiles) {
+      const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+      chip.createSpan({ text: `\u{1F4CE} ${ef.name}` });
+      const x = chip.createSpan({ cls: "qoder-chip-x", text: "\xD7" });
+      x.addEventListener("click", () => {
+        this.externalFiles = this.externalFiles.filter((f) => f !== ef);
+        this.renderChips();
+      });
+    }
     for (const path of this.attachedFiles) {
       const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
       const name = (_b = (_a = path.split("/").pop()) == null ? void 0 : _a.replace(/\.md$/, "")) != null ? _b : path;
@@ -1093,6 +1129,67 @@ var QoderChatView = class extends import_obsidian2.ItemView {
         this.renderChips();
       });
     }
+  }
+  // ============ 划词提问与拖拽附加 ============
+  /** 划词提问：引用编辑器中选中的文本作为提问上下文 */
+  attachQuotedText(text) {
+    this.quotedText = text;
+    this.renderChips();
+    if (this.inputEl) this.inputEl.focus();
+    new import_obsidian2.Notice("\u5DF2\u5F15\u7528\u9009\u4E2D\u6587\u672C\uFF0C\u8F93\u5165\u95EE\u9898\u540E\u53D1\u9001");
+  }
+  async onDropFiles(evt) {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const dt = evt.dataTransfer;
+    if (!dt) return;
+    if (dt.files.length > 0) {
+      for (const f of Array.from(dt.files)) {
+        await this.attachExternalFile(f);
+      }
+      return;
+    }
+    const plain = dt.getData("text/plain").trim();
+    if (!plain) return;
+    const abs = this.app.vault.getAbstractFileByPath(plain);
+    const file = abs instanceof import_obsidian2.TFile ? abs : this.app.metadataCache.getFirstLinkpathDest(plain, "");
+    if (file instanceof import_obsidian2.TFile) {
+      this.attachVaultFile(file);
+    } else {
+      new import_obsidian2.Notice(`\u65E0\u6CD5\u8BC6\u522B\u62D6\u5165\u7684\u5185\u5BB9\uFF1A${plain}`);
+    }
+  }
+  attachVaultFile(file) {
+    if (file.extension === "md") {
+      if (!this.attachedFiles.includes(file.path)) {
+        this.attachedFiles.push(file.path);
+      }
+      this.renderChips();
+      new import_obsidian2.Notice(`\u5DF2\u9644\u52A0\u7B14\u8BB0\uFF1A${file.basename}`);
+      return;
+    }
+    void this.app.vault.cachedRead(file).then((content) => this.pushExternal(file.name, content)).catch(() => new import_obsidian2.Notice(`\u8BFB\u53D6\u5931\u8D25\uFF1A${file.path}`));
+  }
+  async attachExternalFile(f) {
+    if (f.size > 1024 * 1024) {
+      new import_obsidian2.Notice(`\u6587\u4EF6\u8FC7\u5927\uFF08>1MB\uFF09\uFF1A${f.name}`);
+      return;
+    }
+    const textLike = f.type.startsWith("text/") || f.type === "application/json" || /\.(md|txt|markdown|json|csv|tsv|js|ts|css|html|xml|ya?ml)$/i.test(
+      f.name
+    );
+    if (!textLike) {
+      new import_obsidian2.Notice(`\u4EC5\u652F\u6301\u9644\u52A0\u6587\u672C\u6587\u4EF6\uFF1A${f.name}`);
+      return;
+    }
+    this.pushExternal(f.name, await f.text());
+  }
+  pushExternal(name, content) {
+    if (!this.externalFiles.some((f) => f.name === name)) {
+      this.externalFiles.push({ name, content });
+    }
+    this.renderChips();
+    new import_obsidian2.Notice(`\u5DF2\u9644\u52A0\u6587\u4EF6\uFF1A${name}`);
   }
   // ============ 发送 ============
   async send() {
@@ -1112,7 +1209,11 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     if (!text) return;
     this.inputEl.value = "";
     const attached = [...this.attachedFiles];
+    const quoted = this.quotedText;
+    const external = [...this.externalFiles];
     this.attachedFiles = [];
+    this.quotedText = null;
+    this.externalFiles = [];
     this.renderChips();
     const session = this.plugin.currentSession();
     const userMsg = { role: "user", content: text };
@@ -1124,7 +1225,11 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     assistantEl.empty();
     assistantEl.createSpan({ cls: "qoder-thinking", text: "\u601D\u8003\u4E2D\u2026" });
     this.setBusy(true);
-    const requestMessages = await this.buildRequestMessages(attached);
+    const requestMessages = await this.buildRequestMessages(
+      attached,
+      quoted,
+      external
+    );
     let acc = "";
     this.abortController = chatCompletion(
       settings,
@@ -1167,8 +1272,8 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       }
     );
   }
-  /** 组装请求：系统提示 + Rules + 当前笔记 + @引用文件 + 历史 */
-  async buildRequestMessages(attached) {
+  /** 组装请求：系统提示 + Rules + 当前笔记 + @引用/划词/拖拽附件 + 历史 */
+  async buildRequestMessages(attached, quoted, external) {
     const settings = this.plugin.settings;
     const session = this.plugin.currentSession();
     const out = [];
@@ -1208,6 +1313,21 @@ ${note.body}`
         } catch (e) {
         }
       }
+    }
+    if (quoted) {
+      out.push({
+        role: "system",
+        content: `\u7528\u6237\u5212\u8BCD\u9009\u4E2D\u4E86\u4EE5\u4E0B\u6587\u672C\uFF0C\u8BF7\u56F4\u7ED5\u8BE5\u6587\u672C\u56DE\u7B54\u95EE\u9898\uFF1A
+"""
+${quoted}
+"""`
+      });
+    }
+    for (const ef of external) {
+      out.push({
+        role: "system",
+        content: "```" + ef.name + "\n" + ef.content + "\n```"
+      });
     }
     for (const m of session.messages) {
       if ((m.role === "user" || m.role === "assistant") && m.content) {
@@ -1309,6 +1429,27 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
       editorCallback: (editor, view) => void this.inlineChat(editor, view)
     });
     this.addCommand({
+      id: "ask-selection",
+      name: "\u5212\u8BCD\u63D0\u95EE\uFF1A\u5C31\u9009\u4E2D\u6587\u672C\u63D0\u95EE",
+      editorCallback: (editor) => {
+        const sel = editor.getSelection();
+        if (!sel.trim()) {
+          new import_obsidian3.Notice("\u8BF7\u5148\u9009\u4E2D\u6587\u672C");
+          return;
+        }
+        void this.askSelection(sel);
+      }
+    });
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        const sel = editor.getSelection();
+        if (!sel.trim()) return;
+        menu.addItem((item) => {
+          item.setTitle("Qoder Clone\uFF1A\u5212\u8BCD\u63D0\u95EE").setIcon("quote").onClick(() => void this.askSelection(sel));
+        });
+      })
+    );
+    this.addCommand({
       id: "logout-qoder-chat",
       name: "\u9000\u51FA Qoder Clone \u767B\u5F55",
       callback: () => {
@@ -1348,6 +1489,13 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
       }
     }
     if (leaf) workspace.revealLeaf(leaf);
+  }
+  /** 划词提问：打开面板并将选中文本引用到输入框 */
+  async askSelection(text) {
+    await this.activateView();
+    const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+    const view = leaf == null ? void 0 : leaf.view;
+    view == null ? void 0 : view.attachQuotedText(text);
   }
   refreshView() {
     const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];

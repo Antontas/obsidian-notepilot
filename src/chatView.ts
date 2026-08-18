@@ -38,6 +38,8 @@ export class QoderChatView extends ItemView {
 	private popupItems: TFile[] = [];
 	private popupIndex = 0;
 	private attachedFiles: string[] = [];
+	private quotedText: string | null = null;
+	private externalFiles: { name: string; content: string }[] = [];
 	private abortController: AbortController | null = null;
 	private generating = false;
 
@@ -348,9 +350,23 @@ export class QoderChatView extends ItemView {
 		this.inputEl = inputBox.createEl("textarea", {
 			cls: "qoder-chat-input",
 			attr: {
-				placeholder: "提问…（@ 引用笔记，Enter 发送）",
+				placeholder: "提问…（@ 引用笔记，拖入文件附加，Enter 发送）",
 				rows: "2",
 			},
+		});
+
+		// 拖拽文件到输入盒：库内笔记 / 外部文本文件 → 附件上下文
+		this.registerDomEvent(inputBox, "dragover", (evt) => {
+			evt.preventDefault();
+			if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
+			inputBox.addClass("qoder-dragover");
+		});
+		this.registerDomEvent(inputBox, "dragleave", () => {
+			inputBox.removeClass("qoder-dragover");
+		});
+		this.registerDomEvent(inputBox, "drop", (evt) => {
+			inputBox.removeClass("qoder-dragover");
+			void this.onDropFiles(evt);
 		});
 
 		const toolbar = inputBox.createDiv({ cls: "qoder-input-toolbar" });
@@ -783,12 +799,40 @@ export class QoderChatView extends ItemView {
 	}
 
 	private renderChips(): void {
+		if (!this.chipsEl) return;
 		this.chipsEl.empty();
-		if (this.attachedFiles.length === 0) {
+		const hasAny =
+			this.attachedFiles.length > 0 ||
+			this.quotedText !== null ||
+			this.externalFiles.length > 0;
+		if (!hasAny) {
 			this.chipsEl.style.display = "none";
 			return;
 		}
 		this.chipsEl.style.display = "";
+
+		if (this.quotedText !== null) {
+			const q = this.quotedText;
+			const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+			chip.createSpan({ text: `📋 划词选中（${q.length} 字）` });
+			chip.setAttribute("title", q.slice(0, 200));
+			const x = chip.createSpan({ cls: "qoder-chip-x", text: "×" });
+			x.addEventListener("click", () => {
+				this.quotedText = null;
+				this.renderChips();
+			});
+		}
+
+		for (const ef of this.externalFiles) {
+			const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
+			chip.createSpan({ text: `📎 ${ef.name}` });
+			const x = chip.createSpan({ cls: "qoder-chip-x", text: "×" });
+			x.addEventListener("click", () => {
+				this.externalFiles = this.externalFiles.filter((f) => f !== ef);
+				this.renderChips();
+			});
+		}
+
 		for (const path of this.attachedFiles) {
 			const chip = this.chipsEl.createDiv({ cls: "qoder-chip" });
 			const name = path.split("/").pop()?.replace(/\.md$/, "") ?? path;
@@ -799,6 +843,87 @@ export class QoderChatView extends ItemView {
 				this.renderChips();
 			});
 		}
+	}
+
+	// ============ 划词提问与拖拽附加 ============
+
+	/** 划词提问：引用编辑器中选中的文本作为提问上下文 */
+	attachQuotedText(text: string): void {
+		this.quotedText = text;
+		this.renderChips();
+		if (this.inputEl) this.inputEl.focus();
+		new Notice("已引用选中文本，输入问题后发送");
+	}
+
+	private async onDropFiles(evt: DragEvent): Promise<void> {
+		evt.preventDefault();
+		evt.stopPropagation();
+		const dt = evt.dataTransfer;
+		if (!dt) return;
+
+		// 外部操作系统文件
+		if (dt.files.length > 0) {
+			for (const f of Array.from(dt.files)) {
+				await this.attachExternalFile(f);
+			}
+			return;
+		}
+
+		// 库内笔记拖入（文件树拖拽携带路径/链接文本）
+		const plain = dt.getData("text/plain").trim();
+		if (!plain) return;
+		const abs = this.app.vault.getAbstractFileByPath(plain);
+		const file =
+			abs instanceof TFile
+				? abs
+				: this.app.metadataCache.getFirstLinkpathDest(plain, "");
+		if (file instanceof TFile) {
+			this.attachVaultFile(file);
+		} else {
+			new Notice(`无法识别拖入的内容：${plain}`);
+		}
+	}
+
+	private attachVaultFile(file: TFile): void {
+		if (file.extension === "md") {
+			if (!this.attachedFiles.includes(file.path)) {
+				this.attachedFiles.push(file.path);
+			}
+			this.renderChips();
+			new Notice(`已附加笔记：${file.basename}`);
+			return;
+		}
+		// 库内非 md 文本文件：读取内容作为外部附件
+		void this.app.vault
+			.cachedRead(file)
+			.then((content) => this.pushExternal(file.name, content))
+			.catch(() => new Notice(`读取失败：${file.path}`));
+	}
+
+	private async attachExternalFile(f: File): Promise<void> {
+		if (f.size > 1024 * 1024) {
+			new Notice(`文件过大（>1MB）：${f.name}`);
+			return;
+		}
+		const textLike =
+			f.type.startsWith("text/") ||
+			f.type === "application/json" ||
+			/\.(md|txt|markdown|json|csv|tsv|js|ts|css|html|xml|ya?ml)$/i.test(
+				f.name
+			);
+		if (!textLike) {
+			new Notice(`仅支持附加文本文件：${f.name}`);
+			return;
+		}
+		this.pushExternal(f.name, await f.text());
+	}
+
+	private pushExternal(name: string, content: string): void {
+		if (!this.externalFiles.some((f) => f.name === name)) {
+			this.externalFiles.push({ name, content });
+		}
+		this.renderChips();
+		new Notice(`已附加文件：${name}`);
 	}
 
 	// ============ 发送 ============
@@ -823,7 +948,11 @@ export class QoderChatView extends ItemView {
 
 		this.inputEl.value = "";
 		const attached = [...this.attachedFiles];
+		const quoted = this.quotedText;
+		const external = [...this.externalFiles];
 		this.attachedFiles = [];
+		this.quotedText = null;
+		this.externalFiles = [];
 		this.renderChips();
 
 		const session = this.plugin.currentSession();
@@ -839,7 +968,11 @@ export class QoderChatView extends ItemView {
 		assistantEl.createSpan({ cls: "qoder-thinking", text: "思考中…" });
 		this.setBusy(true);
 
-		const requestMessages = await this.buildRequestMessages(attached);
+		const requestMessages = await this.buildRequestMessages(
+			attached,
+			quoted,
+			external
+		);
 
 		let acc = "";
 		this.abortController = chatCompletion(
@@ -886,9 +1019,11 @@ export class QoderChatView extends ItemView {
 		);
 	}
 
-	/** 组装请求：系统提示 + Rules + 当前笔记 + @引用文件 + 历史 */
+	/** 组装请求：系统提示 + Rules + 当前笔记 + @引用/划词/拖拽附件 + 历史 */
 	private async buildRequestMessages(
-		attached: string[]
+		attached: string[],
+		quoted: string | null,
+		external: { name: string; content: string }[]
 	): Promise<LlmRequestMessage[]> {
 		const settings = this.plugin.settings;
 		const session = this.plugin.currentSession();
@@ -933,6 +1068,22 @@ export class QoderChatView extends ItemView {
 					// 跳过读取失败的文件
 				}
 			}
+		}
+
+		// 划词提问：选中文本作为独立上下文
+		if (quoted) {
+			out.push({
+				role: "system",
+				content: `用户划词选中了以下文本，请围绕该文本回答问题：\n"""\n${quoted}\n"""`,
+			});
+		}
+
+		// 拖拽附加的文件：以代码块注入
+		for (const ef of external) {
+			out.push({
+				role: "system",
+				content: "```" + ef.name + "\n" + ef.content + "\n```",
+			});
 		}
 
 		for (const m of session.messages) {

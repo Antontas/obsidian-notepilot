@@ -114,6 +114,33 @@ export default class QoderChatPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "ask-selection",
+			name: "划词提问：就选中文本提问",
+			editorCallback: (editor: Editor) => {
+				const sel = editor.getSelection();
+				if (!sel.trim()) {
+					new Notice("请先选中文本");
+					return;
+				}
+				void this.askSelection(sel);
+			},
+		});
+
+		// 右键菜单：有选中文本时提供「划词提问」
+		this.registerEvent(
+			this.app.workspace.on("editor-menu", (menu, editor) => {
+				const sel = editor.getSelection();
+				if (!sel.trim()) return;
+				menu.addItem((item) => {
+					item
+						.setTitle("Qoder Clone：划词提问")
+						.setIcon("quote")
+						.onClick(() => void this.askSelection(sel));
+				});
+			})
+		);
+
+		this.addCommand({
 			id: "logout-qoder-chat",
 			name: "退出 Qoder Clone 登录",
 			callback: () => {
@@ -157,6 +184,14 @@ export default class QoderChatPlugin extends Plugin {
 			}
 		}
 		if (leaf) workspace.revealLeaf(leaf);
+	}
+
+	/** 划词提问：打开面板并将选中文本引用到输入框 */
+	async askSelection(text: string): Promise<void> {
+		await this.activateView();
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_QODER_CHAT)[0];
+		const view = leaf?.view as QoderChatView | undefined;
+		view?.attachQuotedText(text);
 	}
 
 	refreshView(): void {
