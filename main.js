@@ -334,6 +334,91 @@ async function verifyGemini(settings) {
     return { ok: false, message: `\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}` };
   }
 }
+async function fetchModels(settings) {
+  switch (apiFormatOf(settings)) {
+    case "anthropic":
+      return fetchAnthropicModels(settings);
+    case "gemini":
+      return fetchGeminiModels(settings);
+    default:
+      return fetchOpenAIModels(settings);
+  }
+}
+var NON_CHAT_KEYWORDS = [
+  "embedding",
+  "tts",
+  "audio",
+  "whisper",
+  "moderation",
+  "dall-e",
+  "image",
+  "rerank",
+  "voice",
+  "speech"
+];
+async function fetchOpenAIModels(settings) {
+  var _a;
+  const base = settings.baseUrl.replace(/\/+$/, "");
+  try {
+    const resp = await fetch(base + "/models", {
+      headers: { Authorization: `Bearer ${settings.apiKey}` }
+    });
+    if (!resp.ok) {
+      return { ok: false, models: [], message: `\u83B7\u53D6\u6A21\u578B\u5217\u8868\u5931\u8D25\uFF08HTTP ${resp.status}\uFF09` };
+    }
+    const data = await resp.json();
+    const ids = ((_a = data == null ? void 0 : data.data) != null ? _a : []).map((m) => typeof (m == null ? void 0 : m.id) === "string" ? m.id : "").filter(
+      (id) => id && !NON_CHAT_KEYWORDS.some((k) => id.toLowerCase().includes(k))
+    );
+    return ids.length > 0 ? { ok: true, models: ids, message: `\u5171 ${ids.length} \u4E2A\u6A21\u578B` } : { ok: false, models: [], message: "\u63A5\u53E3\u672A\u8FD4\u56DE\u6A21\u578B\u5217\u8868" };
+  } catch (e) {
+    return { ok: false, models: [], message: `\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}` };
+  }
+}
+async function fetchAnthropicModels(settings) {
+  var _a;
+  const base = settings.baseUrl.replace(/\/+$/, "");
+  try {
+    const resp = await fetch(base + "/v1/models", {
+      headers: {
+        "x-api-key": settings.apiKey,
+        "anthropic-version": "2023-06-01"
+      }
+    });
+    if (!resp.ok) {
+      return { ok: false, models: [], message: `\u83B7\u53D6\u6A21\u578B\u5217\u8868\u5931\u8D25\uFF08HTTP ${resp.status}\uFF09` };
+    }
+    const data = await resp.json();
+    const ids = ((_a = data == null ? void 0 : data.data) != null ? _a : []).map((m) => typeof (m == null ? void 0 : m.id) === "string" ? m.id : "").filter((id) => id);
+    return ids.length > 0 ? { ok: true, models: ids, message: `\u5171 ${ids.length} \u4E2A\u6A21\u578B` } : { ok: false, models: [], message: "\u63A5\u53E3\u672A\u8FD4\u56DE\u6A21\u578B\u5217\u8868" };
+  } catch (e) {
+    return { ok: false, models: [], message: `\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}` };
+  }
+}
+async function fetchGeminiModels(settings) {
+  var _a;
+  const base = settings.baseUrl.replace(/\/+$/, "");
+  try {
+    const resp = await fetch(
+      base + "/v1beta/models?key=" + encodeURIComponent(settings.apiKey)
+    );
+    if (!resp.ok) {
+      return { ok: false, models: [], message: `\u83B7\u53D6\u6A21\u578B\u5217\u8868\u5931\u8D25\uFF08HTTP ${resp.status}\uFF09` };
+    }
+    const data = await resp.json();
+    const ids = ((_a = data == null ? void 0 : data.models) != null ? _a : []).filter(
+      (m) => {
+        var _a2;
+        return (_a2 = m == null ? void 0 : m.supportedGenerationMethods) == null ? void 0 : _a2.includes("generateContent");
+      }
+    ).map(
+      (m) => typeof (m == null ? void 0 : m.name) === "string" ? m.name.replace(/^models\//, "") : ""
+    ).filter((id) => id);
+    return ids.length > 0 ? { ok: true, models: ids, message: `\u5171 ${ids.length} \u4E2A\u6A21\u578B` } : { ok: false, models: [], message: "\u63A5\u53E3\u672A\u8FD4\u56DE\u6A21\u578B\u5217\u8868" };
+  } catch (e) {
+    return { ok: false, models: [], message: `\u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF1A${e.message}` };
+  }
+}
 function chatCompletion(settings, messages, callbacks, onDone) {
   switch (apiFormatOf(settings)) {
     case "anthropic":
@@ -909,6 +994,7 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       var _a;
       const preset = PROVIDER_PRESETS[p];
       this.plugin.settings.provider = p;
+      this.plugin.availableModels = null;
       if (preset.baseUrl) {
         this.plugin.settings.baseUrl = preset.baseUrl;
         urlInput.value = preset.baseUrl;
@@ -952,6 +1038,8 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       if (result.ok) {
         new import_obsidian2.Notice("Qoder Clone \u767B\u5F55\u6210\u529F");
         await this.plugin.saveAll();
+        const fetched = await fetchModels(this.plugin.settings);
+        this.plugin.availableModels = fetched.ok ? fetched.models : null;
         this.plugin.updateStatusBar();
         this.render();
       } else {
@@ -1152,17 +1240,31 @@ var QoderChatView = class extends import_obsidian2.ItemView {
     const modelSelect = toolbar.createEl("select", {
       cls: "qoder-model-select"
     });
-    const models = PROVIDER_MODELS[this.plugin.settings.provider];
+    const presetModels = PROVIDER_MODELS[this.plugin.settings.provider];
+    const fetched = this.plugin.availableModels;
+    const baseModels = fetched && fetched.length > 0 ? fetched : presetModels;
     const current = this.plugin.settings.model;
-    const options = models.includes(current) ? models : [current, ...models];
-    for (const m of options) {
-      const opt = modelSelect.createEl("option", { value: m, text: m });
-      if (m === current) opt.selected = true;
-    }
+    const options = baseModels.includes(current) ? baseModels : [current, ...baseModels];
+    const fillModelSelect = () => {
+      modelSelect.empty();
+      for (const m of options) {
+        const opt = modelSelect.createEl("option", { value: m, text: m });
+        if (m === current) opt.selected = true;
+      }
+    };
+    fillModelSelect();
     modelSelect.addEventListener("change", () => {
       this.plugin.settings.model = modelSelect.value;
       void this.plugin.saveAll();
       this.plugin.updateStatusBar();
+    });
+    const refreshModelsBtn = toolbar.createEl("button", {
+      cls: "qoder-icon-btn",
+      attr: { title: "\u4ECE API \u62C9\u53D6\u53EF\u7528\u6A21\u578B\u5217\u8868" }
+    });
+    (0, import_obsidian2.setIcon)(refreshModelsBtn, "refresh-cw");
+    refreshModelsBtn.addEventListener("click", () => {
+      void this.refreshModels(modelSelect, refreshModelsBtn);
     });
     if (this.plugin.settings.includeActiveNote) {
       const badge = toolbar.createDiv({
@@ -1562,6 +1664,25 @@ var QoderChatView = class extends import_obsidian2.ItemView {
       new import_obsidian2.Notice("\u5DF2\u5F15\u7528\u9009\u4E2D\u6587\u672C\uFF0C\u8F93\u5165\u95EE\u9898\u540E\u53D1\u9001");
     }
   }
+  /** 从 API 拉取当前服务商的可用模型列表并刷新模型下拉框 */
+  async refreshModels(modelSelect, refreshBtn) {
+    refreshBtn.disabled = true;
+    const result = await fetchModels(this.plugin.settings);
+    refreshBtn.disabled = false;
+    if (!result.ok) {
+      new import_obsidian2.Notice(`\u62C9\u53D6\u6A21\u578B\u5217\u8868\u5931\u8D25\uFF1A${result.message}`);
+      return;
+    }
+    this.plugin.availableModels = result.models;
+    const current = this.plugin.settings.model;
+    const options = result.models.includes(current) ? result.models : [current, ...result.models];
+    modelSelect.empty();
+    for (const m of options) {
+      const opt = modelSelect.createEl("option", { value: m, text: m });
+      if (m === current) opt.selected = true;
+    }
+    new import_obsidian2.Notice(`\u5DF2\u83B7\u53D6 ${result.models.length} \u4E2A\u53EF\u7528\u6A21\u578B`);
+  }
   async onDropFiles(evt) {
     evt.preventDefault();
     evt.stopPropagation();
@@ -1853,6 +1974,8 @@ var QoderChatPlugin = class extends import_obsidian3.Plugin {
     this.statusBarEl = null;
     /** 自动识别划词时暂存的选区文本（面板未打开时暂存，面板打开后消费） */
     this.pendingQuotedText = null;
+    /** 从 API 拉取到的可用模型列表（null 表示未拉取；切换服务商时清空） */
+    this.availableModels = null;
   }
   isLoggedIn() {
     return this.settings.apiKey.trim().length > 0;
@@ -2222,6 +2345,7 @@ var QoderChatSettingTab = class extends import_obsidian3.PluginSettingTab {
         const preset = PROVIDER_PRESETS[value];
         if (preset.baseUrl) this.plugin.settings.baseUrl = preset.baseUrl;
         if (preset.model) this.plugin.settings.model = preset.model;
+        this.plugin.availableModels = null;
         await this.plugin.saveAll();
         this.display();
       });

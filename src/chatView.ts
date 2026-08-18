@@ -18,7 +18,7 @@ import {
 } from "./sessions";
 import { PROVIDER_MODELS, PROVIDER_PRESETS, SUGGESTIONS } from "./settings";
 import type { Provider } from "./settings";
-import { chatCompletion, verifyApiKey, LlmRequestMessage } from "./llm";
+import { chatCompletion, fetchModels, verifyApiKey, LlmRequestMessage } from "./llm";
 import { loadRules } from "./rules";
 import { agentToolPrompt, applyEdit, parseEditBlocks, ParsedEdit } from "./fileTools";
 import { lineDiff } from "./diff";
@@ -153,6 +153,8 @@ export class QoderChatView extends ItemView {
 		const applyProvider = (p: Provider) => {
 			const preset = PROVIDER_PRESETS[p];
 			this.plugin.settings.provider = p;
+			// 切换服务商后清空已拉取的模型列表
+			this.plugin.availableModels = null;
 			// 自定义服务商不覆盖用户已填的地址与模型
 			if (preset.baseUrl) {
 				this.plugin.settings.baseUrl = preset.baseUrl;
@@ -201,6 +203,9 @@ export class QoderChatView extends ItemView {
 			if (result.ok) {
 				new Notice("Qoder Clone 登录成功");
 				await this.plugin.saveAll();
+				// 登录成功后自动拉取该服务的可用模型列表（静默，失败不提示）
+				const fetched = await fetchModels(this.plugin.settings);
+				this.plugin.availableModels = fetched.ok ? fetched.models : null;
 				this.plugin.updateStatusBar();
 				this.render();
 			} else {
@@ -432,17 +437,34 @@ export class QoderChatView extends ItemView {
 		const modelSelect = toolbar.createEl("select", {
 			cls: "qoder-model-select",
 		});
-		const models = PROVIDER_MODELS[this.plugin.settings.provider];
+		// 优先用从 API 拉取到的模型列表，否则用预置列表
+		const presetModels = PROVIDER_MODELS[this.plugin.settings.provider];
+		const fetched = this.plugin.availableModels;
+		const baseModels = fetched && fetched.length > 0 ? fetched : presetModels;
 		const current = this.plugin.settings.model;
-		const options = models.includes(current) ? models : [current, ...models];
-		for (const m of options) {
-			const opt = modelSelect.createEl("option", { value: m, text: m });
-			if (m === current) opt.selected = true;
-		}
+		const options = baseModels.includes(current) ? baseModels : [current, ...baseModels];
+		const fillModelSelect = () => {
+			modelSelect.empty();
+			for (const m of options) {
+				const opt = modelSelect.createEl("option", { value: m, text: m });
+				if (m === current) opt.selected = true;
+			}
+		};
+		fillModelSelect();
 		modelSelect.addEventListener("change", () => {
 			this.plugin.settings.model = modelSelect.value;
 			void this.plugin.saveAll();
 			this.plugin.updateStatusBar();
+		});
+
+		// 从 API 拉取可用模型列表
+		const refreshModelsBtn = toolbar.createEl("button", {
+			cls: "qoder-icon-btn",
+			attr: { title: "从 API 拉取可用模型列表" },
+		});
+		setIcon(refreshModelsBtn, "refresh-cw");
+		refreshModelsBtn.addEventListener("click", () => {
+			void this.refreshModels(modelSelect, refreshModelsBtn);
 		});
 
 		if (this.plugin.settings.includeActiveNote) {
@@ -915,6 +937,31 @@ export class QoderChatView extends ItemView {
 			if (this.inputEl) this.inputEl.focus();
 			new Notice("已引用选中文本，输入问题后发送");
 		}
+	}
+
+	/** 从 API 拉取当前服务商的可用模型列表并刷新模型下拉框 */
+	private async refreshModels(
+		modelSelect: HTMLSelectElement,
+		refreshBtn: HTMLButtonElement
+	): Promise<void> {
+		refreshBtn.disabled = true;
+		const result = await fetchModels(this.plugin.settings);
+		refreshBtn.disabled = false;
+		if (!result.ok) {
+			new Notice(`拉取模型列表失败：${result.message}`);
+			return;
+		}
+		this.plugin.availableModels = result.models;
+		const current = this.plugin.settings.model;
+		const options = result.models.includes(current)
+			? result.models
+			: [current, ...result.models];
+		modelSelect.empty();
+		for (const m of options) {
+			const opt = modelSelect.createEl("option", { value: m, text: m });
+			if (m === current) opt.selected = true;
+		}
+		new Notice(`已获取 ${result.models.length} 个可用模型`);
 	}
 
 	private async onDropFiles(evt: DragEvent): Promise<void> {

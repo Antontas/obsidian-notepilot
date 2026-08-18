@@ -67,6 +67,8 @@ export default class QoderChatPlugin extends Plugin {
 	private statusBarEl: HTMLElement | null = null;
 	/** 自动识别划词时暂存的选区文本（面板未打开时暂存，面板打开后消费） */
 	pendingQuotedText: string | null = null;
+	/** 从 API 拉取到的可用模型列表（null 表示未拉取；切换服务商时清空） */
+	availableModels: string[] | null = null;
 
 	isLoggedIn(): boolean {
 		return this.settings.apiKey.trim().length > 0;
@@ -512,6 +514,8 @@ class QoderChatSettingTab extends PluginSettingTab {
 						// 自定义服务商不覆盖用户已填的地址与模型
 						if (preset.baseUrl) this.plugin.settings.baseUrl = preset.baseUrl;
 						if (preset.model) this.plugin.settings.model = preset.model;
+						// 切换服务商后清空已拉取的模型列表
+						this.plugin.availableModels = null;
 						await this.plugin.saveAll();
 						this.display();
 					});

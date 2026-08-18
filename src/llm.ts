@@ -145,6 +145,125 @@ async function verifyGemini(
 	}
 }
 
+// ============ 可用模型列表 ============
+
+export interface FetchModelsResult {
+	ok: boolean;
+	models: string[];
+	message: string;
+}
+
+/** 从 API 拉取当前服务商的可用模型列表（按协议格式分发） */
+export async function fetchModels(
+	settings: QoderChatSettings
+): Promise<FetchModelsResult> {
+	switch (apiFormatOf(settings)) {
+		case "anthropic":
+			return fetchAnthropicModels(settings);
+		case "gemini":
+			return fetchGeminiModels(settings);
+		default:
+			return fetchOpenAIModels(settings);
+	}
+}
+
+/** 模型 ID 黑名单关键词：明显的非对话模型（embedding/语音/图像等） */
+const NON_CHAT_KEYWORDS = [
+	"embedding",
+	"tts",
+	"audio",
+	"whisper",
+	"moderation",
+	"dall-e",
+	"image",
+	"rerank",
+	"voice",
+	"speech",
+];
+
+/** OpenAI 兼容协议：GET /models → data[].id，过滤非对话模型 */
+async function fetchOpenAIModels(
+	settings: QoderChatSettings
+): Promise<FetchModelsResult> {
+	const base = settings.baseUrl.replace(/\/+$/, "");
+	try {
+		const resp = await fetch(base + "/models", {
+			headers: { Authorization: `Bearer ${settings.apiKey}` },
+		});
+		if (!resp.ok) {
+			return { ok: false, models: [], message: `获取模型列表失败（HTTP ${resp.status}）` };
+		}
+		const data = await resp.json();
+		const ids: string[] = (data?.data ?? [])
+			.map((m: { id?: string }) => (typeof m?.id === "string" ? m.id : ""))
+			.filter(
+				(id: string) =>
+					id && !NON_CHAT_KEYWORDS.some((k) => id.toLowerCase().includes(k))
+			);
+		return ids.length > 0
+			? { ok: true, models: ids, message: `共 ${ids.length} 个模型` }
+			: { ok: false, models: [], message: "接口未返回模型列表" };
+	} catch (e) {
+		return { ok: false, models: [], message: `网络请求失败：${(e as Error).message}` };
+	}
+}
+
+/** Anthropic 原生协议：GET /v1/models → data[].id */
+async function fetchAnthropicModels(
+	settings: QoderChatSettings
+): Promise<FetchModelsResult> {
+	const base = settings.baseUrl.replace(/\/+$/, "");
+	try {
+		const resp = await fetch(base + "/v1/models", {
+			headers: {
+				"x-api-key": settings.apiKey,
+				"anthropic-version": "2023-06-01",
+			},
+		});
+		if (!resp.ok) {
+			return { ok: false, models: [], message: `获取模型列表失败（HTTP ${resp.status}）` };
+		}
+		const data = await resp.json();
+		const ids: string[] = (data?.data ?? [])
+			.map((m: { id?: string }) => (typeof m?.id === "string" ? m.id : ""))
+			.filter((id: string) => id);
+		return ids.length > 0
+			? { ok: true, models: ids, message: `共 ${ids.length} 个模型` }
+			: { ok: false, models: [], message: "接口未返回模型列表" };
+	} catch (e) {
+		return { ok: false, models: [], message: `网络请求失败：${(e as Error).message}` };
+	}
+}
+
+/** Gemini 原生协议：GET /v1beta/models → models[].name（去 models/ 前缀），仅保留支持 generateContent 的 */
+async function fetchGeminiModels(
+	settings: QoderChatSettings
+): Promise<FetchModelsResult> {
+	const base = settings.baseUrl.replace(/\/+$/, "");
+	try {
+		const resp = await fetch(
+			base + "/v1beta/models?key=" + encodeURIComponent(settings.apiKey)
+		);
+		if (!resp.ok) {
+			return { ok: false, models: [], message: `获取模型列表失败（HTTP ${resp.status}）` };
+		}
+		const data = await resp.json();
+		const ids: string[] = (data?.models ?? [])
+			.filter((m: { supportedGenerationMethods?: string[] }) =>
+				m?.supportedGenerationMethods?.includes("generateContent")
+			)
+			.map((m: { name?: string }) =>
+				typeof m?.name === "string" ? m.name.replace(/^models\//, "") : ""
+			)
+			.filter((id: string) => id);
+		return ids.length > 0
+			? { ok: true, models: ids, message: `共 ${ids.length} 个模型` }
+			: { ok: false, models: [], message: "接口未返回模型列表" };
+	} catch (e) {
+		return { ok: false, models: [], message: `网络请求失败：${(e as Error).message}` };
+	}
+}
+
 // ============ 对话调用（统一入口，按协议分发） ============
 
 export function chatCompletion(
