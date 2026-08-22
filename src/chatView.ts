@@ -443,6 +443,9 @@ export class NotePilotView extends ItemView {
 			);
 		});
 
+		// Agent 与用户信息之间的分隔
+		titlebar.createDiv({ cls: "oa-titlebar__spacer" });
+
 		// 用户信息（右上角）
 		const userEl = titlebar.createDiv({ cls: "oa-titlebar__user" });
 		const avatar = userEl.createDiv({ cls: "oa-titlebar__avatar" });
@@ -579,8 +582,8 @@ export class NotePilotView extends ItemView {
 		for (const s of sessions) {
 			const tab = tabs.createDiv({ cls: `oa-tab${s.id === this.plugin.currentSessionId ? " oa-tab--active" : ""}` });
 			tab.createSpan({ text: s.title });
-			const closeBtn = tab.createDiv({ cls: "oa-tab__close" });
-			setIcon(closeBtn, "x");
+			const closeBtn = tab.createEl("button", { cls: "oa-tab__close" });
+			closeBtn.textContent = "\u00d7";
 			closeBtn.addEventListener("click", (e) => {
 				e.stopPropagation();
 				if (sessions.length <= 1) return;

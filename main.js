@@ -1243,6 +1243,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         this.plugin.settings.agentMode ? "Agent \u6A21\u5F0F\u5DF2\u5F00\u542F\uFF1AAI \u53EF\u63D0\u51FA\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE" : "Agent \u6A21\u5F0F\u5DF2\u5173\u95ED"
       );
     });
+    titlebar.createDiv({ cls: "oa-titlebar__spacer" });
     const userEl = titlebar.createDiv({ cls: "oa-titlebar__user" });
     const avatar = userEl.createDiv({ cls: "oa-titlebar__avatar" });
     avatar.createSpan({ text: this.plugin.settings.apiKey ? this.plugin.settings.apiKey.charAt(0).toUpperCase() : "?" });
@@ -1348,8 +1349,8 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     for (const s of sessions) {
       const tab = tabs.createDiv({ cls: `oa-tab${s.id === this.plugin.currentSessionId ? " oa-tab--active" : ""}` });
       tab.createSpan({ text: s.title });
-      const closeBtn = tab.createDiv({ cls: "oa-tab__close" });
-      (0, import_obsidian2.setIcon)(closeBtn, "x");
+      const closeBtn = tab.createEl("button", { cls: "oa-tab__close" });
+      closeBtn.textContent = "\xD7";
       closeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         if (sessions.length <= 1) return;
