@@ -165,12 +165,6 @@ var PROVIDER_MODELS = {
     "gemini-2.0-flash-lite"
   ]
 };
-var SUGGESTIONS = [
-  { title: "\u603B\u7ED3\u7B14\u8BB0", prompt: "\u8BF7\u603B\u7ED3\u5F53\u524D\u7B14\u8BB0\u7684\u6838\u5FC3\u8981\u70B9\uFF0C\u7528\u7B80\u6D01\u7684\u6761\u76EE\u5217\u51FA\u3002" },
-  { title: "\u6DA6\u8272\u7B14\u8BB0", prompt: "\u8BF7\u5E2E\u6211\u6DA6\u8272\u5F53\u524D\u7B14\u8BB0\uFF0C\u4FDD\u6301\u539F\u610F\uFF0C\u4F7F\u8BED\u8A00\u66F4\u6D41\u7545\u4E13\u4E1A\u3002" },
-  { title: "\u751F\u6210\u5927\u7EB2", prompt: "\u8BF7\u6839\u636E\u5F53\u524D\u7B14\u8BB0\u5185\u5BB9\u751F\u6210\u4E00\u4EFD\u7ED3\u6784\u5316\u5927\u7EB2\u3002" },
-  { title: "\u7FFB\u8BD1\u7B14\u8BB0", prompt: "\u8BF7\u5C06\u5F53\u524D\u7B14\u8BB0\u7FFB\u8BD1\u6210\u82F1\u6587\uFF0C\u4FDD\u6301 Markdown \u683C\u5F0F\u3002" }
-];
 var DEFAULT_SETTINGS = {
   provider: "dashscope",
   baseUrl: PROVIDER_PRESETS.dashscope.baseUrl,
@@ -1229,7 +1223,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     const titlebar = content.createDiv({ cls: "oa-titlebar" });
     const title = titlebar.createDiv({ cls: "oa-titlebar__title" });
     (0, import_obsidian2.setIcon)(title, "sparkles");
-    title.createSpan({ text: "ObsidianAI" });
+    title.createSpan({ text: "NotePilot" });
     titlebar.createDiv({ cls: "oa-titlebar__spacer" });
     const agentBtn = titlebar.createEl("button", {
       cls: "oa-mode-btn"
@@ -1249,6 +1243,13 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         this.plugin.settings.agentMode ? "Agent \u6A21\u5F0F\u5DF2\u5F00\u542F\uFF1AAI \u53EF\u63D0\u51FA\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE" : "Agent \u6A21\u5F0F\u5DF2\u5173\u95ED"
       );
     });
+    const userEl = titlebar.createDiv({ cls: "oa-titlebar__user" });
+    const avatar = userEl.createDiv({ cls: "oa-titlebar__avatar" });
+    avatar.createSpan({ text: this.plugin.settings.apiKey ? this.plugin.settings.apiKey.charAt(0).toUpperCase() : "?" });
+    const username = this.plugin.settings.provider === "openai" ? "OpenAI" : this.plugin.settings.provider;
+    userEl.createSpan({ text: username });
+    (0, import_obsidian2.setIcon)(userEl, "chevron-down");
+    this.renderTabs(content);
     this.messagesEl = content.createDiv({ cls: "oa-chat__messages" });
     this.renderMessages();
     if (this.quotedText === null && this.plugin.pendingQuotedText) {
@@ -1258,6 +1259,14 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     this.chipsEl = content.createDiv({ cls: "oa-chips" });
     this.renderChips();
     const inputBox = content.createDiv({ cls: "oa-input__box" });
+    const ctxBtn = inputBox.createDiv({ cls: "oa-input__ctx-btn" });
+    (0, import_obsidian2.setIcon)(ctxBtn, "plus");
+    ctxBtn.createSpan({ text: " \u6DFB\u52A0\u4E0A\u4E0B\u6587" });
+    ctxBtn.addEventListener("click", () => {
+      this.inputEl.focus();
+      this.inputEl.value += "@";
+      this.onInput();
+    });
     this.inputEl = inputBox.createEl("textarea", {
       cls: "oa-input__textarea",
       attr: {
@@ -1332,6 +1341,34 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     this.renderStatusBar(content);
     if (this.generating) this.setBusy(true);
   }
+  // ============ 会话标签页 ============
+  renderTabs(content) {
+    const tabs = content.createDiv({ cls: "oa-tabs" });
+    const sessions = [...this.plugin.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+    for (const s of sessions) {
+      const tab = tabs.createDiv({ cls: `oa-tab${s.id === this.plugin.currentSessionId ? " oa-tab--active" : ""}` });
+      tab.createSpan({ text: s.title });
+      const closeBtn = tab.createDiv({ cls: "oa-tab__close" });
+      (0, import_obsidian2.setIcon)(closeBtn, "x");
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (sessions.length <= 1) return;
+        this.plugin.deleteSession(s.id);
+        this.render();
+      });
+      tab.addEventListener("click", () => {
+        this.plugin.switchSession(s.id);
+        this.render();
+      });
+    }
+    const addBtn = tabs.createDiv({ cls: "oa-tabs__add" });
+    (0, import_obsidian2.setIcon)(addBtn, "plus");
+    addBtn.addEventListener("click", () => {
+      this.plugin.newSession();
+      this.attachedFiles = [];
+      this.render();
+    });
+  }
   // ============ 状态栏 ============
   renderStatusBar(content) {
     content.querySelectorAll(".oa-statusbar").forEach((el) => el.remove());
@@ -1370,23 +1407,37 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     const w = this.messagesEl.createDiv({ cls: "oa-welcome" });
     const icon = w.createDiv({ cls: "oa-welcome__icon" });
     (0, import_obsidian2.setIcon)(icon, "sparkles");
-    w.createDiv({ cls: "oa-welcome__title", text: "\u4F60\u597D" });
+    w.createDiv({ cls: "oa-welcome__title", text: "NotePilot" });
     w.createDiv({
       cls: "oa-welcome__sub",
-      text: "\u6211\u662F ObsidianAI\uFF0C\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002\u8F93\u5165 @ \u53EF\u5F15\u7528\u5E93\u5185\u7B14\u8BB0\u3002"
+      text: "\u6211\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002"
     });
-    const grid = w.createDiv({ cls: "oa-welcome__grid" });
-    for (const s of SUGGESTIONS) {
-      const btn = grid.createEl("button", {
-        cls: "oa-welcome__card",
-        text: s.title
-      });
-      btn.addEventListener("click", () => void this.sendText(s.prompt));
+    const shortcuts = w.createDiv({ cls: "oa-welcome__shortcuts" });
+    const items = [
+      { key: "Shift + Enter", desc: "\u6362\u884C" },
+      { key: "Ctrl + Shift + L", desc: "\u6253\u5F00/\u5173\u95ED\u9762\u677F" },
+      { key: "@", desc: "\u5F15\u7528\u7B14\u8BB0" },
+      { key: "Alt + N", desc: "\u65B0\u5EFA\u4F1A\u8BDD" },
+      { key: "Alt + M", desc: "\u5207\u6362\u6A21\u5F0F" }
+    ];
+    for (const item of items) {
+      const row = shortcuts.createDiv({ cls: "oa-welcome__shortcut" });
+      row.createSpan({ cls: "oa-welcome__shortcut-desc", text: item.desc });
+      const keys = row.createDiv({ cls: "oa-welcome__shortcut-keys" });
+      for (const k of item.key.split(" + ")) {
+        keys.createSpan({ cls: "oa-welcome__shortcut-key", text: k });
+      }
     }
   }
   appendMessageEl(msg) {
     const cls = msg.role === "user" ? "oa-msg oa-msg--user" : msg.role === "error" ? "oa-msg oa-msg--error" : "oa-msg oa-msg--assistant";
     const el = this.messagesEl.createDiv({ cls });
+    if (msg.role === "user" || msg.role === "assistant") {
+      const header = el.createDiv({ cls: "oa-msg-header" });
+      const avatarDiv = header.createDiv({ cls: msg.role === "user" ? "oa-msg-header__avatar oa-msg-header__avatar--accent" : "oa-msg-header__avatar" });
+      (0, import_obsidian2.setIcon)(avatarDiv, msg.role === "user" ? "user" : "sparkles");
+      header.createSpan({ cls: "oa-msg-header__name", text: msg.role === "user" ? "You" : "NotePilot" });
+    }
     if (msg.role === "user" || msg.role === "error") {
       el.setText(msg.content);
     } else {

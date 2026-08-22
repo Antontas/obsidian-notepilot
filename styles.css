@@ -552,6 +552,117 @@
   color: var(--oa-text-error);
 }
 
+/* 标题栏右侧用户信息 */
+.oa-titlebar__user {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  font-size: var(--oa-fs-xs);
+  color: var(--oa-text-muted);
+  cursor: pointer;
+  padding: var(--oa-s-4) var(--oa-s-8);
+  border-radius: var(--oa-r-s);
+}
+.oa-titlebar__user:hover {
+  background: var(--oa-bg-hover);
+}
+.oa-titlebar__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--oa-accent);
+  color: var(--oa-text-on-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: var(--oa-fw-semibold);
+}
+
+/* ==========================================================================
+   SESSION TABS —— 横向会话标签页
+   ========================================================================== */
+
+.oa-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--oa-border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  background: var(--oa-bg-alt);
+  height: 30px;
+  padding: 0 var(--oa-s-4);
+}
+.oa-tabs::-webkit-scrollbar { height: 0; }
+
+.oa-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  padding: var(--oa-s-4) var(--oa-s-8);
+  font-size: var(--oa-fs-xs);
+  color: var(--oa-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  height: 100%;
+  flex-shrink: 0;
+}
+.oa-tab:hover {
+  color: var(--oa-text);
+  background: var(--oa-bg-hover);
+}
+.oa-tab--active {
+  color: var(--oa-text);
+  border-bottom-color: var(--oa-text-accent);
+}
+.oa-tab__close {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--oa-r-s);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 100ms;
+}
+.oa-tab:hover .oa-tab__close,
+.oa-tab--active .oa-tab__close {
+  opacity: 1;
+}
+.oa-tab__close:hover {
+  background: var(--oa-bg-active);
+  color: var(--oa-text-error);
+}
+.oa-tab__close svg {
+  width: 10px;
+  height: 10px;
+}
+
+.oa-tabs__add {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: var(--oa-r-s);
+  background: transparent;
+  color: var(--oa-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: var(--oa-s-4);
+}
+.oa-tabs__add:hover {
+  background: var(--oa-bg-hover);
+  color: var(--oa-text);
+}
+.oa-tabs__add svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ==========================================================================
    CHAT MESSAGES
    ========================================================================== */
@@ -672,6 +783,70 @@
 }
 
 /* ==========================================================================
+   MESSAGE HEADER —— 用户/AI 头部（头像 + 名字 + 时间戳）
+   ========================================================================== */
+
+.oa-msg-header {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  margin-bottom: var(--oa-s-4);
+  font-size: var(--oa-fs-xs);
+  color: var(--oa-text-muted);
+}
+
+.oa-msg-header__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--oa-bg-alt);
+  border: 1px solid var(--oa-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.oa-msg-header__avatar svg {
+  width: 12px;
+  height: 12px;
+}
+.oa-msg-header__avatar--accent {
+  background: var(--oa-accent);
+  border-color: var(--oa-accent);
+  color: var(--oa-text-on-accent);
+}
+
+.oa-msg-header__name {
+  font-weight: var(--oa-fw-semibold);
+}
+
+.oa-msg-header__time {
+  color: var(--oa-text-faint);
+  font-size: var(--oa-fs-xs);
+}
+
+.oa-msg-header__spacer { flex: 1; }
+
+.oa-msg-header__delete {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--oa-text-faint);
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: var(--oa-r-s);
+}
+.oa-msg-header__delete svg {
+  width: 14px;
+  height: 14px;
+}
+.oa-msg-header__delete:hover {
+  color: var(--oa-text-error);
+  background: var(--oa-bg-hover);
+}
+
+/* ==========================================================================
    WELCOME —— 模仿 Obsidian 空状态
    ========================================================================== */
 
@@ -741,6 +916,40 @@
 }
 .oa-welcome__card:active {
   background: var(--oa-bg-active);
+}
+
+/* 快捷键列表 */
+.oa-welcome__shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--oa-s-8);
+  width: 100%;
+  max-width: 280px;
+  margin-top: var(--oa-s-12);
+}
+.oa-welcome__shortcut {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-8);
+  font-size: var(--oa-fs-sm);
+  color: var(--oa-text-muted);
+}
+.oa-welcome__shortcut-desc {
+  color: var(--oa-text-muted);
+}
+.oa-welcome__shortcut-keys {
+  display: flex;
+  gap: var(--oa-s-4);
+  margin-left: auto;
+}
+.oa-welcome__shortcut-key {
+  padding: 2px var(--oa-s-4);
+  border-radius: var(--oa-r-s);
+  background: var(--oa-bg-alt);
+  border: 1px solid var(--oa-border);
+  font-size: var(--oa-fs-xs);
+  color: var(--oa-text);
+  font-family: monospace;
 }
 
 /* ==========================================================================
@@ -877,6 +1086,91 @@
 .oa-input__stop:hover {
   background: var(--oa-bg-active);
   color: var(--oa-text);
+}
+
+/* 添加上下文按钮 */
+.oa-input__ctx-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  font-size: var(--oa-fs-xs);
+  color: var(--oa-text-muted);
+  background: transparent;
+  border: 1px solid var(--oa-border);
+  border-radius: var(--oa-r-s);
+  padding: var(--oa-s-4) var(--oa-s-8);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.oa-input__ctx-btn svg {
+  width: 12px;
+  height: 12px;
+}
+.oa-input__ctx-btn:hover {
+  background: var(--oa-bg-hover);
+  color: var(--oa-text);
+}
+
+/* 下拉菜单按钮 */
+.oa-input__dropdown {
+  position: relative;
+}
+.oa-input__dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  font-size: var(--oa-fs-xs);
+  padding: var(--oa-s-4) var(--oa-s-8);
+  border-radius: var(--oa-r-s);
+  border: none;
+  background: transparent;
+  color: var(--oa-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.oa-input__dropdown-btn svg {
+  width: 10px;
+  height: 10px;
+}
+.oa-input__dropdown-btn:hover {
+  background: var(--oa-bg-hover);
+  color: var(--oa-text);
+}
+.oa-input__dropdown-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  min-width: 140px;
+  background: var(--oa-bg-s);
+  border: 1px solid var(--oa-border);
+  border-radius: var(--oa-r-s);
+  padding: var(--oa-s-4);
+  z-index: var(--oa-z-pop);
+  display: none;
+}
+.oa-input__dropdown-menu.is-open {
+  display: block;
+}
+.oa-input__dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  padding: var(--oa-s-4) var(--oa-s-8);
+  font-size: var(--oa-fs-xs);
+  border-radius: var(--oa-r-s);
+  cursor: pointer;
+  color: var(--oa-text);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+.oa-input__dropdown-item:hover {
+  background: var(--oa-bg-hover);
+}
+.oa-input__dropdown-item.is-active {
+  color: var(--oa-text-accent);
+  background: var(--oa-bg-active);
 }
 
 /* ==========================================================================

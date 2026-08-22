@@ -418,7 +418,7 @@ export class NotePilotView extends ItemView {
 		const titlebar = content.createDiv({ cls: "oa-titlebar" });
 		const title = titlebar.createDiv({ cls: "oa-titlebar__title" });
 		setIcon(title, "sparkles");
-		title.createSpan({ text: "ObsidianAI" });
+		title.createSpan({ text: "NotePilot" });
 		titlebar.createDiv({ cls: "oa-titlebar__spacer" });
 
 		// Agent 模式开关
@@ -443,6 +443,17 @@ export class NotePilotView extends ItemView {
 			);
 		});
 
+		// 用户信息（右上角）
+		const userEl = titlebar.createDiv({ cls: "oa-titlebar__user" });
+		const avatar = userEl.createDiv({ cls: "oa-titlebar__avatar" });
+		avatar.createSpan({ text: this.plugin.settings.apiKey ? this.plugin.settings.apiKey.charAt(0).toUpperCase() : "?" });
+		const username = this.plugin.settings.provider === "openai" ? "OpenAI" : this.plugin.settings.provider;
+		userEl.createSpan({ text: username });
+		setIcon(userEl, "chevron-down");
+
+		// 会话标签页
+		this.renderTabs(content);
+
 		// 消息区
 		this.messagesEl = content.createDiv({ cls: "oa-chat__messages" });
 		this.renderMessages();
@@ -459,6 +470,18 @@ export class NotePilotView extends ItemView {
 
 		// 输入盒
 		const inputBox = content.createDiv({ cls: "oa-input__box" });
+
+		// 添加上下文按钮
+		const ctxBtn = inputBox.createDiv({ cls: "oa-input__ctx-btn" });
+		setIcon(ctxBtn, "plus");
+		ctxBtn.createSpan({ text: " 添加上下文" });
+		ctxBtn.addEventListener("click", () => {
+			// 触发 @ 弹窗用于添加笔记引用
+			this.inputEl.focus();
+			this.inputEl.value += "@";
+			this.onInput();
+		});
+
 		this.inputEl = inputBox.createEl("textarea", {
 			cls: "oa-input__textarea",
 			attr: {
@@ -548,6 +571,37 @@ export class NotePilotView extends ItemView {
 		if (this.generating) this.setBusy(true);
 	}
 
+	// ============ 会话标签页 ============
+
+	private renderTabs(content: HTMLElement): void {
+		const tabs = content.createDiv({ cls: "oa-tabs" });
+		const sessions = [...this.plugin.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+		for (const s of sessions) {
+			const tab = tabs.createDiv({ cls: `oa-tab${s.id === this.plugin.currentSessionId ? " oa-tab--active" : ""}` });
+			tab.createSpan({ text: s.title });
+			const closeBtn = tab.createDiv({ cls: "oa-tab__close" });
+			setIcon(closeBtn, "x");
+			closeBtn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				if (sessions.length <= 1) return;
+				this.plugin.deleteSession(s.id);
+				this.render();
+			});
+			tab.addEventListener("click", () => {
+				this.plugin.switchSession(s.id);
+				this.render();
+			});
+		}
+		// 新建标签页按钮
+		const addBtn = tabs.createDiv({ cls: "oa-tabs__add" });
+		setIcon(addBtn, "plus");
+		addBtn.addEventListener("click", () => {
+			this.plugin.newSession();
+			this.attachedFiles = [];
+			this.render();
+		});
+	}
+
 	// ============ 状态栏 ============
 
 	private renderStatusBar(content: HTMLElement): void {
@@ -600,18 +654,27 @@ export class NotePilotView extends ItemView {
 		const w = this.messagesEl.createDiv({ cls: "oa-welcome" });
 		const icon = w.createDiv({ cls: "oa-welcome__icon" });
 		setIcon(icon, "sparkles");
-		w.createDiv({ cls: "oa-welcome__title", text: "你好" });
+		w.createDiv({ cls: "oa-welcome__title", text: "NotePilot" });
 		w.createDiv({
 			cls: "oa-welcome__sub",
-			text: "我是 ObsidianAI，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
+			text: "我可以帮你总结、润色、改写笔记与问答。",
 		});
-		const grid = w.createDiv({ cls: "oa-welcome__grid" });
-		for (const s of SUGGESTIONS) {
-			const btn = grid.createEl("button", {
-				cls: "oa-welcome__card",
-				text: s.title,
-			});
-			btn.addEventListener("click", () => void this.sendText(s.prompt));
+		// 快捷键列表
+		const shortcuts = w.createDiv({ cls: "oa-welcome__shortcuts" });
+		const items = [
+			{ key: "Shift + Enter", desc: "换行" },
+			{ key: "Ctrl + Shift + L", desc: "打开/关闭面板" },
+			{ key: "@", desc: "引用笔记" },
+			{ key: "Alt + N", desc: "新建会话" },
+			{ key: "Alt + M", desc: "切换模式" },
+		];
+		for (const item of items) {
+			const row = shortcuts.createDiv({ cls: "oa-welcome__shortcut" });
+			row.createSpan({ cls: "oa-welcome__shortcut-desc", text: item.desc });
+			const keys = row.createDiv({ cls: "oa-welcome__shortcut-keys" });
+			for (const k of item.key.split(" + ")) {
+				keys.createSpan({ cls: "oa-welcome__shortcut-key", text: k });
+			}
 		}
 	}
 
@@ -623,6 +686,15 @@ export class NotePilotView extends ItemView {
 				? "oa-msg oa-msg--error"
 				: "oa-msg oa-msg--assistant";
 		const el = this.messagesEl.createDiv({ cls });
+
+		// 消息头部（头像 + 名字）
+		if (msg.role === "user" || msg.role === "assistant") {
+			const header = el.createDiv({ cls: "oa-msg-header" });
+			const avatarDiv = header.createDiv({ cls: msg.role === "user" ? "oa-msg-header__avatar oa-msg-header__avatar--accent" : "oa-msg-header__avatar" });
+			setIcon(avatarDiv, msg.role === "user" ? "user" : "sparkles");
+			header.createSpan({ cls: "oa-msg-header__name", text: msg.role === "user" ? "You" : "NotePilot" });
+		}
+
 		if (msg.role === "user" || msg.role === "error") {
 			el.setText(msg.content);
 		} else {
