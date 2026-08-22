@@ -54,11 +54,11 @@ export class NotePilotView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return "NotePilot";
+		return "ObsidianAI";
 	}
 
 	getIcon(): string {
-		return "bot";
+		return "sparkles";
 	}
 
 	async onOpen(): Promise<void> {
@@ -76,7 +76,7 @@ export class NotePilotView extends ItemView {
 	private render(): void {
 		const root = this.containerEl.children[1] as HTMLElement;
 		root.empty();
-		root.addClass("notepilot-view");
+		root.addClass("oa-view");
 		if (!this.plugin.isLoggedIn()) {
 			this.renderLogin(root);
 			return;
@@ -91,21 +91,21 @@ export class NotePilotView extends ItemView {
 	// ============ 登录页 ============
 
 	private renderLogin(root: HTMLElement): void {
-		const wrap = root.createDiv({ cls: "notepilot-login-wrap" });
-		const card = wrap.createDiv({ cls: "notepilot-login-card" });
+		const wrap = root.createDiv({ cls: "oa-login" });
+		const card = wrap.createDiv({ cls: "oa-login__card" });
 
-		const logo = card.createDiv({ cls: "notepilot-logo" });
-		setIcon(logo, "bot");
-		card.createEl("div", { cls: "notepilot-logo-text", text: "NotePilot" });
-		card.createEl("h2", { cls: "notepilot-login-title", text: "登录 NotePilot" });
+		const logo = card.createDiv({ cls: "oa-login__logo" });
+		setIcon(logo, "sparkles");
+		card.createEl("div", { cls: "oa-login__brand", text: "ObsidianAI" });
+		card.createEl("h2", { cls: "oa-login__title", text: "登录 ObsidianAI" });
 		card.createEl("p", {
-			cls: "notepilot-login-desc",
+			cls: "oa-login__desc",
 			text: "选择服务商并输入 API Key 登录，密钥仅保存在本机 Obsidian 配置中。",
 		});
 
 		// 服务商选择
 		const providerSelect = card.createEl("select", {
-			cls: "notepilot-login-input",
+			cls: "oa-login__field",
 		});
 		for (const [p, preset] of Object.entries(PROVIDER_PRESETS)) {
 			const opt = providerSelect.createEl("option", {
@@ -116,29 +116,30 @@ export class NotePilotView extends ItemView {
 		}
 
 		const keyInput = card.createEl("input", {
-			cls: "notepilot-login-input",
+			cls: "oa-login__field",
 			type: "password",
 			attr: { placeholder: "输入 API Key（sk-...）" },
 		});
 
-		const adv = card.createDiv({ cls: "notepilot-login-adv" });
+		const adv = card.createDiv({ cls: "oa-login__advanced" });
 		adv.createEl("label", { text: "Base URL" });
 		const urlInput = adv.createEl("input", {
-			cls: "notepilot-login-input",
+			cls: "oa-login__field",
 			type: "text",
 			value: this.plugin.settings.baseUrl,
 		});
 
-		const statusEl = card.createDiv({ cls: "notepilot-login-status" });
+		const statusEl = card.createDiv({ cls: "oa-login__status" });
 
 		const loginBtn = card.createEl("button", {
-			cls: "notepilot-login-btn",
+			cls: "oa-login__btn",
 			text: "登 录",
+			attr: { "aria-label": "登录" },
 		});
 
 		const link = card.createEl("a", {
-			cls: "notepilot-login-link",
-			text: "获取 API Key →",
+			cls: "oa-login__link",
+			text: "获取 API Key",
 		});
 
 		// 各服务商的 Key 占位提示（未列出的用默认文案）
@@ -167,7 +168,7 @@ export class NotePilotView extends ItemView {
 			);
 			if (preset.keyUrl) {
 				link.style.display = "";
-				link.setText(`前往 ${preset.label} 获取 API Key →`);
+				link.setText(`前往 ${preset.label} 获取 API Key`);
 			} else {
 				link.style.display = "none";
 			}
@@ -191,7 +192,8 @@ export class NotePilotView extends ItemView {
 				return;
 			}
 			loginBtn.disabled = true;
-			statusEl.setText("正在验证凭证…");
+			loginBtn.setAttribute("aria-busy", "true");
+			statusEl.setText("正在验证凭证...");
 			this.plugin.settings.provider = provider;
 			// Ollama 本地服务与自定义服务可无需密钥
 			this.plugin.settings.apiKey =
@@ -200,8 +202,9 @@ export class NotePilotView extends ItemView {
 			if (url) this.plugin.settings.baseUrl = url;
 			const result = await verifyApiKey(this.plugin.settings);
 			loginBtn.disabled = false;
+			loginBtn.setAttribute("aria-busy", "false");
 			if (result.ok) {
-				new Notice("NotePilot 登录成功");
+				new Notice("ObsidianAI 登录成功");
 				await this.plugin.saveAll();
 				// 登录成功后自动拉取该服务的可用模型列表（静默，失败不提示）
 				const fetched = await fetchModels(this.plugin.settings);
@@ -224,9 +227,9 @@ export class NotePilotView extends ItemView {
 	// ============ 历史会话列表（参照 Continue History 页） ============
 
 	private renderHistory(root: HTMLElement): void {
-		const header = root.createDiv({ cls: "notepilot-header" });
+		const header = root.createDiv({ cls: "oa-header" });
 		const backBtn = header.createEl("button", {
-			cls: "notepilot-icon-btn",
+			cls: "oa-header__btn",
 			attr: { title: "返回聊天" },
 		});
 		setIcon(backBtn, "arrow-left");
@@ -234,52 +237,52 @@ export class NotePilotView extends ItemView {
 			this.state = "chat";
 			this.render();
 		});
-		header.createDiv({ cls: "notepilot-header-title", text: "历史会话" });
-		header.createDiv({ cls: "notepilot-toolbar-spacer" });
+		header.createDiv({ cls: "oa-header__title", text: "历史会话" });
+		header.createDiv({ cls: "oa-header__spacer" });
 
 		const newBtn = header.createEl("button", {
-			cls: "notepilot-icon-btn",
+			cls: "oa-header__btn",
 			attr: { title: "新对话" },
 		});
-		setIcon(newBtn, "square-plus");
+		setIcon(newBtn, "plus");
 		newBtn.addEventListener("click", () => {
 			this.plugin.newSession();
 			this.state = "chat";
 			this.render();
 		});
 
-		const list = root.createDiv({ cls: "notepilot-history-list" });
+		const list = root.createDiv({ cls: "oa-history" });
 		const sessions = [...this.plugin.sessions].sort(
 			(a, b) => b.updatedAt - a.updatedAt
 		);
 		if (sessions.length === 0) {
-			list.createDiv({ cls: "notepilot-chat-empty", text: "暂无会话" });
+			list.createDiv({ cls: "oa-empty", text: "暂无会话" });
 			return;
 		}
 
 		for (const s of sessions) {
-			const row = list.createDiv({ cls: "notepilot-history-row" });
+			const row = list.createDiv({ cls: "oa-history__row" });
 			if (s.id === this.plugin.currentSessionId) {
-				row.addClass("notepilot-history-row-active");
+				row.addClass("oa-history__row--active");
 			}
 
-			const body = row.createDiv({ cls: "notepilot-history-body" });
-			const titleRow = body.createDiv({ cls: "notepilot-history-title-row" });
+			const body = row.createDiv({ cls: "oa-history__body" });
+			const titleRow = body.createDiv({ cls: "oa-history__title-row" });
 			const titleEl = titleRow.createSpan({
-				cls: "notepilot-history-title",
+				cls: "oa-history__title",
 				text: s.title,
 			});
 			const count = s.messages.filter((m) => m.role !== "error").length;
-			titleRow.createSpan({ cls: "notepilot-history-count", text: String(count) });
+			titleRow.createSpan({ cls: "oa-history__count", text: String(count) });
 			body.createDiv({
-				cls: "notepilot-history-date",
+				cls: "oa-history__date",
 				text: formatDate(s.updatedAt),
 			});
 
 			// hover 操作按钮：重命名 / 导出 Markdown / 删除
-			const actions = row.createDiv({ cls: "notepilot-history-actions" });
+			const actions = row.createDiv({ cls: "oa-history__actions" });
 			const editBtn = actions.createEl("button", {
-				cls: "notepilot-icon-btn",
+				cls: "oa-header__btn",
 				attr: { title: "重命名" },
 			});
 			setIcon(editBtn, "pencil");
@@ -289,7 +292,7 @@ export class NotePilotView extends ItemView {
 			});
 
 			const exportBtn = actions.createEl("button", {
-				cls: "notepilot-icon-btn",
+				cls: "oa-header__btn",
 				attr: { title: "导出为 Markdown" },
 			});
 			setIcon(exportBtn, "download");
@@ -299,7 +302,7 @@ export class NotePilotView extends ItemView {
 			});
 
 			const delBtn = actions.createEl("button", {
-				cls: "notepilot-icon-btn notepilot-icon-btn-danger",
+				cls: "oa-header__btn oa-header__btn--danger",
 				attr: { title: "删除" },
 			});
 			setIcon(delBtn, "trash-2");
@@ -325,7 +328,7 @@ export class NotePilotView extends ItemView {
 		const input = document.createElement("input");
 		input.type = "text";
 		input.value = session.title;
-		input.addClass("notepilot-history-rename");
+		input.addClass("oa-history__rename");
 		titleEl.replaceWith(input);
 		input.focus();
 		input.select();
@@ -347,10 +350,10 @@ export class NotePilotView extends ItemView {
 		const session = this.plugin.sessions.find((x) => x.id === id);
 		if (!session) return;
 		const safe = session.title.replace(/[\\/:*?"<>|#^\[\]]/g, "").slice(0, 40);
-		let path = `NotePilot ${safe}.md`;
+		let path = `ObsidianAI ${safe}.md`;
 		let n = 1;
 		while (this.app.vault.getAbstractFileByPath(path)) {
-			path = `NotePilot ${safe} ${n++}.md`;
+			path = `ObsidianAI ${safe} ${n++}.md`;
 		}
 		const file = await this.app.vault.create(path, sessionToMarkdown(session));
 		new Notice(`已导出：${path}`);
@@ -361,14 +364,14 @@ export class NotePilotView extends ItemView {
 	// ============ 聊天页 ============
 
 	private renderChat(root: HTMLElement): void {
-		const header = root.createDiv({ cls: "notepilot-header" });
-		const title = header.createDiv({ cls: "notepilot-header-title" });
-		setIcon(title, "bot");
-		title.createSpan({ text: "NotePilot" });
-		header.createDiv({ cls: "notepilot-toolbar-spacer" });
+		const header = root.createDiv({ cls: "oa-header" });
+		const title = header.createDiv({ cls: "oa-header__title" });
+		setIcon(title, "sparkles");
+		title.createSpan({ text: "ObsidianAI" });
+		header.createDiv({ cls: "oa-header__spacer" });
 
 		const historyBtn = header.createEl("button", {
-			cls: "notepilot-icon-btn",
+			cls: "oa-header__btn",
 			attr: { title: "历史会话" },
 		});
 		setIcon(historyBtn, "history");
@@ -378,10 +381,10 @@ export class NotePilotView extends ItemView {
 		});
 
 		const newBtn = header.createEl("button", {
-			cls: "notepilot-icon-btn",
+			cls: "oa-header__btn",
 			attr: { title: "新对话" },
 		});
-		setIcon(newBtn, "square-plus");
+		setIcon(newBtn, "plus");
 		newBtn.addEventListener("click", () => {
 			this.plugin.newSession();
 			this.attachedFiles = [];
@@ -389,14 +392,14 @@ export class NotePilotView extends ItemView {
 		});
 
 		const logoutBtn = header.createEl("button", {
-			cls: "notepilot-icon-btn",
+			cls: "oa-header__btn",
 			attr: { title: "退出登录" },
 		});
 		setIcon(logoutBtn, "log-out");
 		logoutBtn.addEventListener("click", () => this.logout());
 
 		// 消息区
-		this.messagesEl = root.createDiv({ cls: "notepilot-chat-messages" });
+		this.messagesEl = root.createDiv({ cls: "oa-chat__messages" });
 		this.renderMessages();
 
 		// 自动识别划词：渲染聊天界面时消费暂存的选区文本
@@ -406,15 +409,15 @@ export class NotePilotView extends ItemView {
 		}
 
 		// 附加文件 chips
-		this.chipsEl = root.createDiv({ cls: "notepilot-chips" });
+		this.chipsEl = root.createDiv({ cls: "oa-chips" });
 		this.renderChips();
 
 		// 输入盒
-		const inputBox = root.createDiv({ cls: "notepilot-input-box" });
+		const inputBox = root.createDiv({ cls: "oa-input__box" });
 		this.inputEl = inputBox.createEl("textarea", {
-			cls: "notepilot-chat-input",
+			cls: "oa-input__textarea",
 			attr: {
-				placeholder: "提问…（@ 引用笔记，拖入文件附加，Enter 发送）",
+				placeholder: "提问...（@ 引用笔记，拖入文件附加，Enter 发送）",
 				rows: "2",
 			},
 		});
@@ -423,19 +426,19 @@ export class NotePilotView extends ItemView {
 		this.registerDomEvent(inputBox, "dragover", (evt) => {
 			evt.preventDefault();
 			if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
-			inputBox.addClass("notepilot-dragover");
+			inputBox.addClass("oa-input__box--dragover");
 		});
 		this.registerDomEvent(inputBox, "dragleave", () => {
-			inputBox.removeClass("notepilot-dragover");
+			inputBox.removeClass("oa-input__box--dragover");
 		});
 		this.registerDomEvent(inputBox, "drop", (evt) => {
-			inputBox.removeClass("notepilot-dragover");
+			inputBox.removeClass("oa-input__box--dragover");
 			void this.onDropFiles(evt);
 		});
 
-		const toolbar = inputBox.createDiv({ cls: "notepilot-input-toolbar" });
+		const toolbar = inputBox.createDiv({ cls: "oa-input__toolbar" });
 		const modelSelect = toolbar.createEl("select", {
-			cls: "notepilot-model-select",
+			cls: "oa-input__model",
 		});
 		// 优先用从 API 拉取到的模型列表，否则用预置列表
 		const presetModels = PROVIDER_MODELS[this.plugin.settings.provider];
@@ -459,7 +462,7 @@ export class NotePilotView extends ItemView {
 
 		// 从 API 拉取可用模型列表
 		const refreshModelsBtn = toolbar.createEl("button", {
-			cls: "notepilot-icon-btn",
+			cls: "oa-header__btn",
 			attr: { title: "从 API 拉取可用模型列表" },
 		});
 		setIcon(refreshModelsBtn, "refresh-cw");
@@ -469,20 +472,22 @@ export class NotePilotView extends ItemView {
 
 		if (this.plugin.settings.includeActiveNote) {
 			const badge = toolbar.createDiv({
-				cls: "notepilot-ctx-badge",
-				text: "📄 当前笔记",
+				cls: "oa-input__badge",
 			});
+			setIcon(badge, "file-text");
+			badge.createSpan({ text: " 当前笔记" });
 			badge.setAttribute("title", "提问时将附带当前笔记内容");
 		}
 
 		// Agent 模式开关：开启后 AI 可提出文件修改建议（需审批）
 		const agentBtn = toolbar.createEl("button", {
-			cls: "notepilot-mode-btn",
-			text: "⚡ Agent",
+			cls: "oa-mode-btn",
 		});
+		setIcon(agentBtn, "bot");
+		agentBtn.createSpan({ text: " Agent" });
 		agentBtn.setAttribute("title", "Agent 模式：AI 可建议创建/修改库内文件（需你审批）");
 		const syncAgentBtn = () =>
-			agentBtn.toggleClass("notepilot-mode-on", this.plugin.settings.agentMode);
+			agentBtn.toggleClass("oa-mode-btn--active", this.plugin.settings.agentMode);
 		syncAgentBtn();
 		agentBtn.addEventListener("click", () => {
 			this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
@@ -495,18 +500,19 @@ export class NotePilotView extends ItemView {
 			);
 		});
 
-		toolbar.createDiv({ cls: "notepilot-toolbar-spacer" });
+		toolbar.createDiv({ cls: "oa-input__toolbar-spacer" });
 
 		this.stopBtn = toolbar.createEl("button", {
-			cls: "notepilot-chat-stop",
-			text: "停止",
+			cls: "oa-input__stop",
+			attr: { "aria-label": "停止生成" },
 		});
+		setIcon(this.stopBtn, "square");
 		this.stopBtn.style.display = "none";
 		this.stopBtn.addEventListener("click", () => this.stop());
 
-		this.sendBtn = toolbar.createEl("button", { cls: "notepilot-chat-send" });
+		this.sendBtn = toolbar.createEl("button", { cls: "oa-input__send" });
 		setIcon(this.sendBtn, "arrow-up");
-		this.sendBtn.setAttribute("aria-label", "发送");
+		this.sendBtn.setAttribute("aria-label", "发送消息");
 		this.sendBtn.addEventListener("click", () => void this.send());
 
 		this.inputEl.addEventListener("keydown", (e) => this.onInputKeydown(e));
@@ -530,16 +536,16 @@ export class NotePilotView extends ItemView {
 	}
 
 	private renderWelcome(): void {
-		const w = this.messagesEl.createDiv({ cls: "notepilot-welcome" });
-		w.createDiv({ cls: "notepilot-welcome-hi", text: "你好 👋" });
+		const w = this.messagesEl.createDiv({ cls: "oa-welcome" });
+		w.createDiv({ cls: "oa-welcome__title", text: "你好" });
 		w.createDiv({
-			cls: "notepilot-welcome-sub",
-			text: "我是 NotePilot，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
+			cls: "oa-welcome__sub",
+			text: "我是 ObsidianAI，可以帮你总结、润色、改写笔记与问答。输入 @ 可引用库内笔记。",
 		});
-		const grid = w.createDiv({ cls: "notepilot-suggestions" });
+		const grid = w.createDiv({ cls: "oa-welcome__grid" });
 		for (const s of SUGGESTIONS) {
 			const btn = grid.createEl("button", {
-				cls: "notepilot-suggestion-btn",
+				cls: "oa-welcome__card",
 				text: s.title,
 			});
 			btn.addEventListener("click", () => void this.sendText(s.prompt));
@@ -549,10 +555,10 @@ export class NotePilotView extends ItemView {
 	private appendMessageEl(msg: ChatMessage): HTMLElement {
 		const cls =
 			msg.role === "user"
-				? "notepilot-msg notepilot-msg-user"
+				? "oa-msg oa-msg--user"
 				: msg.role === "error"
-				? "notepilot-msg notepilot-msg-system-err"
-				: "notepilot-msg notepilot-msg-assistant";
+				? "oa-msg oa-msg--error"
+				: "oa-msg oa-msg--assistant";
 		const el = this.messagesEl.createDiv({ cls });
 		if (msg.role === "user" || msg.role === "error") {
 			el.setText(msg.content);
@@ -570,17 +576,17 @@ export class NotePilotView extends ItemView {
 	/** 为代码块添加 复制 / 插入笔记 按钮（参照 Continue 代码块操作） */
 	private addCodeActions(el: HTMLElement): void {
 		el.querySelectorAll("pre").forEach((pre) => {
-			if (pre.querySelector(".notepilot-code-actions")) return;
+			if (pre.querySelector(".oa-code-actions")) return;
 			const bar = document.createElement("div");
-			bar.addClass("notepilot-code-actions");
-			const copyBtn = bar.createEl("button", { text: "复制" });
+			bar.addClass("oa-code-actions");
+			const copyBtn = bar.createEl("button", { cls: "oa-code-actions__btn", text: "复制" });
 			copyBtn.addEventListener("click", () => {
 				const code = pre.querySelector("code");
 				void navigator.clipboard
 					.writeText(code?.innerText ?? "")
 					.then(() => new Notice("已复制代码"));
 			});
-			const insertBtn = bar.createEl("button", { text: "插入笔记" });
+			const insertBtn = bar.createEl("button", { cls: "oa-code-actions__btn", text: "插入笔记" });
 			insertBtn.addEventListener("click", () => {
 				const code = pre.querySelector("code");
 				this.insertIntoNote(code?.innerText ?? "");
@@ -631,32 +637,33 @@ export class NotePilotView extends ItemView {
 			this.stripRenderedEditBlocks(container, parsed);
 		}
 		// 防重：同一条消息只渲染一次审批卡片
-		if (parsed.length === 0 || container.querySelector(".notepilot-edit-cards")) {
+		if (parsed.length === 0 || container.querySelector(".oa-edit-cards")) {
 			return;
 		}
 
-		const wrap = container.createDiv({ cls: "notepilot-edit-cards" });
-		wrap.createDiv({
-			cls: "notepilot-edit-cards-title",
-			text: `📝 检测到 ${parsed.length} 项文件修改建议，确认后生效`,
+		const wrap = container.createDiv({ cls: "oa-edit-cards" });
+		const titleEl = wrap.createDiv({
+			cls: "oa-edit-cards__title",
 		});
+		setIcon(titleEl, "pencil");
+		titleEl.createSpan({ text: ` 检测到 ${parsed.length} 项文件修改建议，确认后生效` });
 
 		for (const p of parsed) {
-			const card = wrap.createDiv({ cls: "notepilot-edit-card" });
+			const card = wrap.createDiv({ cls: "oa-edit-card" });
 
 			if (!p.edit) {
 				card.createDiv({
-					cls: "notepilot-edit-path",
-					text: `⚠️ 编辑块解析失败：${p.error ?? "未知错误"}`,
+					cls: "oa-edit-card__path",
+					text: `编辑块解析失败：${p.error ?? "未知错误"}`,
 				});
-				card.createEl("pre", { cls: "notepilot-edit-raw", text: p.raw });
+				card.createEl("pre", { cls: "oa-edit-card__raw", text: p.raw });
 				continue;
 			}
 
 			const edit = p.edit;
-			const head = card.createDiv({ cls: "notepilot-edit-head" });
+			const head = card.createDiv({ cls: "oa-edit-card__head" });
 			head.createSpan({
-				cls: `notepilot-edit-action notepilot-edit-action-${edit.action}`,
+				cls: `oa-edit-card__action oa-edit-card__action--${edit.action}`,
 				text:
 					edit.action === "replace"
 						? "替换"
@@ -664,17 +671,17 @@ export class NotePilotView extends ItemView {
 						? "新建"
 						: "覆写",
 			});
-			head.createSpan({ cls: "notepilot-edit-path", text: edit.path });
+			head.createSpan({ cls: "oa-edit-card__path", text: edit.path });
 
 			// Diff 预览
-			const diffEl = card.createDiv({ cls: "notepilot-edit-diff" });
+			const diffEl = card.createDiv({ cls: "oa-edit-card__diff" });
 			const addDiffLine = (type: "add" | "del" | "same", lineText: string) => {
 				const row = diffEl.createDiv({
-					cls: `notepilot-diff-line notepilot-diff-${type}`,
+					cls: `oa-diff__line oa-diff__line--${type}`,
 				});
 				row.createSpan({
-					cls: "notepilot-diff-mark",
-					text: type === "add" ? "+" : type === "del" ? "−" : " ",
+					cls: "oa-diff__mark",
+					text: type === "add" ? "+" : type === "del" ? "\u2212" : " ",
 				});
 				row.createSpan({ text: lineText || " " });
 			};
@@ -688,15 +695,15 @@ export class NotePilotView extends ItemView {
 				for (const l of allLines.slice(0, 12)) addDiffLine("add", l);
 				if (allLines.length > 12) {
 					diffEl.createDiv({
-						cls: "notepilot-diff-line",
-						text: `…（共 ${allLines.length} 行）`,
+						cls: "oa-diff__line",
+						text: `...（共 ${allLines.length} 行）`,
 					});
 				}
 			}
 
 			// 操作按钮
-			const btnRow = card.createDiv({ cls: "notepilot-edit-btns" });
-			const status = btnRow.createSpan({ cls: "notepilot-edit-status" });
+			const btnRow = card.createDiv({ cls: "oa-edit-card__btns" });
+			const status = btnRow.createSpan({ cls: "oa-edit-card__status" });
 			const reject = btnRow.createEl("button", { text: "拒绝" });
 			const apply = btnRow.createEl("button", {
 				text: "应用",
@@ -713,11 +720,11 @@ export class NotePilotView extends ItemView {
 					apply.disabled = true;
 					try {
 						const msg = await applyEdit(this.app, edit);
-						status.setText(`✅ ${msg}`);
+						status.setText(msg);
 						reject.disabled = true;
 						new Notice(msg);
 					} catch (e) {
-						status.setText(`❌ ${(e as Error).message}`);
+						status.setText(`错误: ${(e as Error).message}`);
 						apply.disabled = false;
 					}
 				})();
@@ -733,6 +740,7 @@ export class NotePilotView extends ItemView {
 		this.generating = busy;
 		this.sendBtn.disabled = busy;
 		this.sendBtn.style.display = busy ? "none" : "";
+		this.sendBtn.setAttribute("aria-busy", String(busy));
 		this.stopBtn.style.display = busy ? "" : "none";
 		this.inputEl.disabled = busy;
 	}
@@ -824,21 +832,21 @@ export class NotePilotView extends ItemView {
 
 		if (!this.popupEl) {
 			const root = this.containerEl.children[1] as HTMLElement;
-			this.popupEl = root.createDiv({ cls: "notepilot-at-popup" });
+			this.popupEl = root.createDiv({ cls: "oa-popup" });
 		}
 		this.popupEl.empty();
 		if (files.length === 0) {
 			this.popupEl.createDiv({
-				cls: "notepilot-at-item notepilot-at-empty",
+				cls: "oa-popup__item oa-popup__empty",
 				text: "没有匹配的笔记",
 			});
 			return;
 		}
 		files.forEach((f, idx) => {
-			const item = this.popupEl!.createDiv({ cls: "notepilot-at-item" });
-			item.createSpan({ cls: "notepilot-at-name", text: f.basename });
-			item.createSpan({ cls: "notepilot-at-path", text: f.path });
-			if (idx === this.popupIndex) item.addClass("notepilot-at-active");
+			const item = this.popupEl!.createDiv({ cls: "oa-popup__item" });
+			item.createSpan({ cls: "oa-popup__name", text: f.basename });
+			item.createSpan({ cls: "oa-popup__path", text: f.path });
+			if (idx === this.popupIndex) item.addClass("oa-popup__item--active");
 			item.addEventListener("mousedown", (e) => {
 				e.preventDefault();
 				this.selectAtFile(f);
@@ -848,8 +856,8 @@ export class NotePilotView extends ItemView {
 
 	private highlightPopup(): void {
 		if (!this.popupEl) return;
-		this.popupEl.querySelectorAll(".notepilot-at-item").forEach((el, idx) => {
-			el.toggleClass("notepilot-at-active", idx === this.popupIndex);
+		this.popupEl.querySelectorAll(".oa-popup__item").forEach((el, idx) => {
+			el.toggleClass("oa-popup__item--active", idx === this.popupIndex);
 		});
 	}
 
@@ -894,31 +902,34 @@ export class NotePilotView extends ItemView {
 
 		if (this.quotedText !== null) {
 			const q = this.quotedText;
-			const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
-			chip.createSpan({ text: `📋 划词选中（${q.length} 字）` });
+			const chip = this.chipsEl.createDiv({ cls: "oa-chip" });
+			setIcon(chip, "quote");
+			chip.createSpan({ text: ` 划词选中（${q.length} 字）` });
 			chip.setAttribute("title", q.slice(0, 200));
-			const x = chip.createSpan({ cls: "notepilot-chip-x", text: "×" });
+			const x = chip.createSpan({ cls: "oa-chip__remove", text: "\u00d7" });
 			x.addEventListener("click", () => {
 				this.quotedText = null;
 				this.renderChips();
 			});
 		}
-
+		
 		for (const ef of this.externalFiles) {
-			const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
-			chip.createSpan({ text: `📎 ${ef.name}` });
-			const x = chip.createSpan({ cls: "notepilot-chip-x", text: "×" });
+			const chip = this.chipsEl.createDiv({ cls: "oa-chip" });
+			setIcon(chip, "paperclip");
+			chip.createSpan({ text: ` ${ef.name}` });
+			const x = chip.createSpan({ cls: "oa-chip__remove", text: "\u00d7" });
 			x.addEventListener("click", () => {
 				this.externalFiles = this.externalFiles.filter((f) => f !== ef);
 				this.renderChips();
 			});
 		}
-
+		
 		for (const path of this.attachedFiles) {
-			const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
+			const chip = this.chipsEl.createDiv({ cls: "oa-chip" });
 			const name = path.split("/").pop()?.replace(/\.md$/, "") ?? path;
-			chip.createSpan({ text: `📄 ${name}` });
-			const x = chip.createSpan({ cls: "notepilot-chip-x", text: "×" });
+			setIcon(chip, "file-text");
+			chip.createSpan({ text: ` ${name}` });
+			const x = chip.createSpan({ cls: "oa-chip__remove", text: "\u00d7" });
 			x.addEventListener("click", () => {
 				this.attachedFiles = this.attachedFiles.filter((p) => p !== path);
 				this.renderChips();
@@ -1119,7 +1130,7 @@ export class NotePilotView extends ItemView {
 		this.renderMessages();
 		const assistantEl = this.messagesEl.lastElementChild as HTMLElement;
 		assistantEl.empty();
-		assistantEl.createSpan({ cls: "notepilot-thinking", text: "思考中…" });
+		assistantEl.createSpan({ cls: "oa-msg--thinking", text: "思考中..." });
 		this.setBusy(true);
 
 		const requestMessages = await this.buildRequestMessages(
@@ -1151,7 +1162,7 @@ export class NotePilotView extends ItemView {
 				onError: (message) => {
 					assistantMsg.role = "error";
 					assistantMsg.content = message;
-					assistantEl.className = "notepilot-msg notepilot-msg-system-err";
+					assistantEl.className = "oa-msg oa-msg--error";
 					assistantEl.setText(message);
 					new Notice(message);
 				},
@@ -1161,7 +1172,7 @@ export class NotePilotView extends ItemView {
 				this.setBusy(false);
 				if (!assistantMsg.content) {
 					assistantEl.empty();
-					assistantEl.setText("(无内容)");
+					assistantEl.setText("（无内容）");
 				} else {
 					this.addCodeActions(assistantEl);
 					this.renderEditCards(assistantEl, assistantMsg.content);

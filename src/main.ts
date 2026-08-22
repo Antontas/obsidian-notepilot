@@ -125,19 +125,19 @@ export default class NotePilotPlugin extends Plugin {
 		this.statusBarEl = this.addStatusBarItem();
 		this.updateStatusBar();
 
-		this.addRibbonIcon("bot", "打开 NotePilot", () => {
+		this.addRibbonIcon("sparkles", "打开 ObsidianAI", () => {
 			void this.activateView();
 		});
 
 		this.addCommand({
 			id: "open-notepilot",
-			name: "打开 NotePilot 面板",
+			name: "打开 ObsidianAI 面板",
 			callback: () => void this.activateView(),
 		});
 
 		this.addCommand({
 			id: "new-notepilot-chat",
-			name: "新建 NotePilot 对话",
+			name: "新建 ObsidianAI 对话",
 			callback: () => {
 				this.newSession();
 				this.refreshView();
@@ -171,7 +171,7 @@ export default class NotePilotPlugin extends Plugin {
 				if (!sel.trim()) return;
 				menu.addItem((item) => {
 					item
-						.setTitle("NotePilot：划词提问")
+						.setTitle("ObsidianAI：划词提问")
 						.setIcon("quote")
 						.onClick(() => void this.askSelection(sel));
 				});
@@ -180,13 +180,13 @@ export default class NotePilotPlugin extends Plugin {
 
 		this.addCommand({
 			id: "logout-notepilot-chat",
-			name: "退出 NotePilot 登录",
+			name: "退出 ObsidianAI 登录",
 			callback: () => {
 				this.settings.apiKey = "";
 				void this.saveAll();
 				this.updateStatusBar();
 				this.refreshView();
-				new Notice("已退出 NotePilot 登录");
+				new Notice("已退出 ObsidianAI 登录");
 			},
 		});
 
@@ -200,10 +200,10 @@ export default class NotePilotPlugin extends Plugin {
 		if (!this.statusBarEl) return;
 		if (this.isLoggedIn()) {
 			this.statusBarEl.setText(
-				`NotePilot · 已登录 · ${this.settings.model}`
+				`ObsidianAI · 已登录 · ${this.settings.model}`
 			);
 		} else {
-			this.statusBarEl.setText("NotePilot · 未登录");
+			this.statusBarEl.setText("ObsidianAI · 未登录");
 		}
 	}
 
@@ -302,7 +302,7 @@ export default class NotePilotPlugin extends Plugin {
 	/** Inline Chat：选中文本 → 指令 → AI 改写 → Diff 预览 → 应用 */
 	async inlineChat(editor: Editor, view: MarkdownView): Promise<void> {
 		if (!this.isLoggedIn()) {
-			new Notice("请先登录 NotePilot");
+			new Notice("请先登录 ObsidianAI");
 			return;
 		}
 		const sel = editor.getSelection();
@@ -314,7 +314,7 @@ export default class NotePilotPlugin extends Plugin {
 		const instruction = await new InstructionModal(this.app).openAndWait();
 		if (instruction === null) return;
 
-		new Notice("NotePilot 正在改写…");
+		new Notice("ObsidianAI 正在改写...");
 		let result: string;
 		try {
 			result = await this.complete([
@@ -373,16 +373,16 @@ class InstructionModal extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
-		contentEl.addClass("notepilot-modal");
-		contentEl.createEl("h3", { text: "Inline Chat：如何改写选中文本？" });
+		contentEl.addClass("oa-modal");
+		contentEl.createEl("h3", { cls: "oa-modal__title", text: "Inline Chat：如何改写选中文本？" });
 		const input = contentEl.createEl("textarea", {
-			cls: "notepilot-modal-input",
+			cls: "oa-modal__body",
 			attr: {
-				placeholder: "例如：润色语言 / 翻译成英文 / 精简为 3 句话…",
+				placeholder: "例如：润色语言 / 翻译成英文 / 精简为 3 句话...",
 				rows: "3",
 			},
 		});
-		const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
+		const row = contentEl.createDiv({ cls: "oa-modal__actions" });
 		const cancel = row.createEl("button", { text: "取消" });
 		const ok = row.createEl("button", {
 			text: "改写",
@@ -439,19 +439,19 @@ class DiffModal extends Modal {
 
 	onOpen(): void {
 		const { contentEl } = this;
-		contentEl.addClass("notepilot-modal");
-		contentEl.createEl("h3", { text: "改动预览（Diff）" });
+		contentEl.addClass("oa-modal");
+		contentEl.createEl("h3", { cls: "oa-modal__title", text: "改动预览（Diff）" });
 
-		const diffEl = contentEl.createDiv({ cls: "notepilot-diff" });
+		const diffEl = contentEl.createDiv({ cls: "oa-diff" });
 		for (const line of lineDiff(this.oldText, this.newText)) {
-			const row = diffEl.createDiv({ cls: `notepilot-diff-line notepilot-diff-${line.type}` });
+			const row = diffEl.createDiv({ cls: `oa-diff__line oa-diff__line--${line.type}` });
 			const mark =
-				line.type === "add" ? "+" : line.type === "del" ? "−" : " ";
-			row.createSpan({ cls: "notepilot-diff-mark", text: mark });
+				line.type === "add" ? "+" : line.type === "del" ? "\u2212" : " ";
+			row.createSpan({ cls: "oa-diff__mark", text: mark });
 			row.createSpan({ text: line.text || " " });
 		}
 
-		const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
+		const row = contentEl.createDiv({ cls: "oa-modal__actions" });
 		const reject = row.createEl("button", { text: "拒绝" });
 		const accept = row.createEl("button", {
 			text: "接受改动",
@@ -487,7 +487,7 @@ class NotePilotSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "NotePilot 设置" });
+		containerEl.createEl("h2", { text: "ObsidianAI 设置" });
 
 		new Setting(containerEl)
 			.setName("登录状态")
@@ -653,8 +653,8 @@ class NotePilotSettingTab extends PluginSettingTab {
 			);
 
 		containerEl.createEl("p", {
-			cls: "notepilot-settings-notice",
-			text: "说明：本插件为仿 NotePilot 的独立实现，界面与交互参照开源项目 Continue（Apache 2.0）。BYOK 模式需要你自己提供大模型 API，密钥仅存储在本机 Obsidian 配置中。",
+			cls: "oa-settings__notice",
+			text: "说明：本插件为 ObsidianAI 的独立实现，界面与交互参照开源项目 Continue（Apache 2.0）。BYOK 模式需要你自己提供大模型 API，密钥仅存储在本机 Obsidian 配置中。",
 		});
 	}
 

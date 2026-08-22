@@ -45,9 +45,9 @@ export function sessionToMarkdown(session: ChatSession): string {
 		if (m.role === "user") {
 			lines.push("**用户：**", "", m.content, "");
 		} else if (m.role === "assistant") {
-			lines.push("**NotePilot：**", "", m.content, "");
+			lines.push("**ObsidianAI：**", "", m.content, "");
 		} else {
-			lines.push(`> ⚠️ ${m.content}`, "");
+			lines.push(`> ${m.content}`, "");
 		}
 	}
 	return lines.join("\n");
