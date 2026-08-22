@@ -1,9 +1,7 @@
 /* ========================================================================
    ObsidianAI —— 侧边栏聊天助手界面
-   设计语言：Obsidian 原生融合 · 精致克制 · 内容优先
-   技术路径：Obsidian CSS 变量 + 内置组件优先 + BEM 自定义 CSS
-   原生准则：零阴影（弹层除外）· 小圆角 · 无位移/缩放动效
-            hover/active 统一 modifier 变量 · 强调色仅用于发送与激活模式按钮
+   设计语言：Obsidian 内置面板视觉密度 · 极简扁平 · 原生变量
+   目标：让用户感觉这是 Obsidian 内置功能，而非嵌入的网页
    ======================================================================== */
 
 /* ==========================================================================
@@ -11,17 +9,15 @@
    ========================================================================== */
 
 :root {
-  /* ---- 颜色 ---- */
   --oa-accent: var(--interactive-accent);
   --oa-accent-h: var(--interactive-accent-hover);
   --oa-bg: var(--background-primary);
-  --oa-bg-secondary: var(--background-secondary);
+  --oa-bg-alt: var(--background-secondary);
   --oa-bg-hover: var(--background-modifier-hover);
   --oa-bg-active: var(--background-modifier-active-hover);
-  --oa-bg-field: var(--background-modifier-form-field);
   --oa-border: var(--background-modifier-border);
-  --oa-border-hover: var(--background-modifier-border-hover);
-  --oa-border-focus: var(--background-modifier-border-focus);
+  --oa-border-h: var(--background-modifier-border-hover);
+  --oa-border-f: var(--background-modifier-border-focus);
   --oa-text: var(--text-normal);
   --oa-text-muted: var(--text-muted);
   --oa-text-faint: var(--text-faint);
@@ -34,9 +30,7 @@
   --oa-bg-error: var(--background-modifier-error);
   --oa-bg-warning: var(--background-modifier-warning);
 
-  /* ---- 字体 ---- */
   --oa-font: var(--font-interface-theme);
-  --oa-font-text: var(--font-text-theme);
   --oa-font-mono: var(--font-monospace-theme);
   --oa-fs-xs: var(--font-ui-smaller);
   --oa-fs-sm: var(--font-ui-small);
@@ -48,7 +42,6 @@
   --oa-lh: var(--line-height-normal);
   --oa-lh-tight: var(--line-height-tight);
 
-  /* ---- 间距 ---- */
   --oa-s-4: var(--size-4-1);
   --oa-s-8: var(--size-4-2);
   --oa-s-12: var(--size-4-3);
@@ -57,24 +50,9 @@
   --oa-s-24: var(--size-4-6);
   --oa-s-32: var(--size-4-8);
 
-  /* ---- 圆角（原生密度：仅 s/m） ---- */
   --oa-r-s: var(--radius-s);
   --oa-r-m: var(--radius-m);
-
-  /* ---- 过渡 ---- */
-  --oa-t-fast: 100ms ease;
-
-  /* ---- 焦点（原生 border-focus，非强调色环） ---- */
-  --oa-focus: 0 0 0 2px var(--background-modifier-border-focus);
-}
-
-/* ==========================================================================
-   ANIMATIONS（仅保留功能性加载指示）
-   ========================================================================== */
-
-@keyframes oa-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.35; }
+  --oa-r-l: var(--radius-l);
 }
 
 /* ==========================================================================
@@ -97,73 +75,35 @@
   box-sizing: border-box;
 }
 
-/* 通用过渡 */
 .oa-view button,
 .oa-view input,
 .oa-view select,
 .oa-view textarea {
-  transition: background var(--oa-t-fast),
-              border-color var(--oa-t-fast),
-              color var(--oa-t-fast),
-              opacity var(--oa-t-fast);
+  transition: background-color 100ms ease,
+              border-color 100ms ease,
+              color 100ms ease,
+              opacity 100ms ease;
 }
 
-/* 焦点 */
 .oa-view :focus-visible {
   outline: none;
-  box-shadow: var(--oa-focus);
-  border-radius: var(--oa-r-s);
+  box-shadow: 0 0 0 2px var(--oa-accent);
 }
 
-/* 禁用 */
 .oa-view :disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* 主按钮 */
-.oa-view button.mod-cta {
-  background: var(--oa-accent);
-  color: var(--oa-text-on-accent);
-  border: none;
-  border-radius: var(--oa-r-m);
-  font-weight: var(--oa-fw-semibold);
-  font-size: var(--oa-fs-sm);
-  padding: var(--oa-s-8) var(--oa-s-16);
-  cursor: pointer;
-  letter-spacing: 0.01em;
-}
-.oa-view button.mod-cta:hover {
-  background: var(--oa-accent-h);
-}
-
-/* 次按钮 */
-.oa-view button.oa-btn--secondary {
-  background: var(--oa-bg-secondary);
-  color: var(--oa-text);
-  border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
-  font-size: var(--oa-fs-sm);
-  padding: var(--oa-s-8) var(--oa-s-16);
-  cursor: pointer;
-}
-.oa-view button.oa-btn--secondary:hover {
-  background: var(--oa-bg-hover);
-  border-color: var(--oa-border-hover);
-}
-.oa-view button.oa-btn--secondary:active {
-  background: var(--oa-bg-active);
-}
-
-/* 滚动条 */
-.oa-view ::-webkit-scrollbar { width: 6px; }
+/* 滚动条 —— 与 Obsidian 原生一致 */
+.oa-view ::-webkit-scrollbar { width: 4px; }
 .oa-view ::-webkit-scrollbar-track { background: transparent; }
 .oa-view ::-webkit-scrollbar-thumb {
   background: var(--oa-border);
-  border-radius: 3px;
+  border-radius: 0;
 }
 .oa-view ::-webkit-scrollbar-thumb:hover {
-  background: var(--oa-border-hover);
+  background: var(--oa-border-h);
 }
 
 /* 空状态 */
@@ -172,17 +112,16 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--oa-s-32) var(--oa-s-16);
+  padding: var(--oa-s-24) var(--oa-s-16);
   color: var(--oa-text-muted);
   font-size: var(--oa-fs-sm);
   text-align: center;
   gap: var(--oa-s-8);
 }
 .oa-empty svg {
-  width: 32px;
-  height: 32px;
-  opacity: 0.4;
-  margin-bottom: var(--oa-s-4);
+  width: 28px;
+  height: 28px;
+  opacity: 0.3;
 }
 
 /* ==========================================================================
@@ -194,51 +133,43 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--oa-s-24);
+  padding: var(--oa-s-16);
   overflow-y: auto;
 }
 
 .oa-login__card {
   width: 100%;
-  max-width: 360px;
-  padding: var(--oa-s-32);
-  border-radius: var(--oa-r-m);
-  background: var(--oa-bg-secondary);
-  border: 1px solid var(--oa-border);
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--oa-s-16);
+  gap: var(--oa-s-12);
 }
 
 .oa-login__logo {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--oa-r-m);
-  background: var(--oa-bg);
-  border: 1px solid var(--oa-border);
-  color: var(--oa-text-muted);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--oa-r-s);
+  background: var(--oa-accent);
+  color: var(--oa-text-on-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--oa-s-4);
 }
 .oa-login__logo svg {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
 }
 
 .oa-login__brand {
-  font-size: var(--oa-fs-lg);
-  font-weight: var(--oa-fw-bold);
-  letter-spacing: -0.01em;
+  font-size: var(--oa-fs-md);
+  font-weight: var(--oa-fw-semibold);
   color: var(--oa-text);
 }
 
 .oa-login__title {
-  margin: -4px 0 0;
+  margin: 0;
   font-size: var(--oa-fs-sm);
-  font-weight: var(--oa-fw-normal);
   color: var(--oa-text-muted);
 }
 
@@ -248,12 +179,12 @@
   color: var(--oa-text-faint);
   text-align: center;
   line-height: var(--oa-lh);
-  max-width: 280px;
+  max-width: 260px;
 }
 
 .oa-login__field {
   width: 100%;
-  border-radius: var(--oa-r-m);
+  border-radius: var(--oa-r-s);
   font-size: var(--oa-fs-sm);
   padding: var(--oa-s-8) var(--oa-s-12);
   background: var(--oa-bg);
@@ -261,11 +192,11 @@
   color: var(--oa-text);
 }
 .oa-login__field:hover {
-  border-color: var(--oa-border-hover);
+  border-color: var(--oa-border-h);
 }
 .oa-login__field:focus {
-  border-color: var(--oa-border-focus);
-  box-shadow: none;
+  border-color: var(--oa-accent);
+  box-shadow: 0 0 0 1px var(--oa-accent);
 }
 
 .oa-login__advanced {
@@ -277,9 +208,7 @@
 .oa-login__advanced label {
   font-size: var(--oa-fs-xs);
   color: var(--oa-text-muted);
-  font-weight: var(--oa-fw-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: var(--oa-fw-normal);
 }
 
 .oa-login__status {
@@ -295,19 +224,20 @@
   background: var(--oa-accent);
   color: var(--oa-text-on-accent);
   border: none;
-  border-radius: var(--oa-r-m);
-  padding: var(--oa-s-12) 0;
-  font-size: var(--oa-fs-md);
+  border-radius: var(--oa-r-s);
+  padding: var(--oa-s-8) 0;
+  font-size: var(--oa-fs-sm);
   font-weight: var(--oa-fw-semibold);
   cursor: pointer;
-  letter-spacing: 0.02em;
-  transition: all var(--oa-t-fast);
 }
 .oa-login__btn:hover {
   background: var(--oa-accent-h);
 }
+.oa-login__btn:active {
+  background: var(--oa-accent-h);
+}
 .oa-login__btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -316,22 +246,20 @@
   color: var(--oa-text-accent);
   cursor: pointer;
   text-decoration: none;
-  transition: opacity var(--oa-t-fast);
 }
 .oa-login__link:hover {
   text-decoration: underline;
-  opacity: 0.8;
 }
 
 /* ==========================================================================
-   HEADER
+   HEADER —— 模仿 Obsidian 面板顶栏
    ========================================================================== */
 
 .oa-header {
   display: flex;
   align-items: center;
   gap: var(--oa-s-4);
-  padding: var(--oa-s-12) var(--oa-s-16);
+  padding: var(--oa-s-8) var(--oa-s-12);
   border-bottom: 1px solid var(--oa-border);
   flex-shrink: 0;
   -webkit-app-region: no-drag;
@@ -345,33 +273,29 @@
   font-size: var(--oa-fs-sm);
   flex: 1;
   color: var(--oa-text);
-  letter-spacing: -0.01em;
 }
 .oa-header__title svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   color: var(--oa-text-muted);
 }
 
-.oa-header__spacer {
-  flex: 1;
-}
+.oa-header__spacer { flex: 1; }
 
 .oa-header__btn {
   background: transparent;
   border: none;
   border-radius: var(--oa-r-s);
-  padding: var(--oa-s-8);
+  padding: var(--oa-s-4);
   cursor: pointer;
   color: var(--oa-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
 }
 .oa-header__btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 .oa-header__btn:hover {
   background: var(--oa-bg-hover);
@@ -382,7 +306,6 @@
 }
 .oa-header__btn--danger:hover {
   color: var(--oa-text-error);
-  background: var(--oa-bg-error);
 }
 
 /* ==========================================================================
@@ -392,45 +315,40 @@
 .oa-chat__messages {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: var(--oa-s-16) var(--oa-s-12);
+  padding: var(--oa-s-8);
   display: flex;
   flex-direction: column;
   gap: var(--oa-s-12);
-  scroll-behavior: smooth;
 }
 
-/* 消息气泡 */
+/* 消息 —— 扁平化，无阴影 */
 .oa-msg {
-  max-width: 92%;
+  max-width: 90%;
   padding: var(--oa-s-8) var(--oa-s-12);
-  border-radius: var(--oa-r-m);
+  border-radius: var(--oa-r-s);
   font-size: var(--oa-fs-sm);
   line-height: var(--oa-lh);
   word-break: break-word;
-  position: relative;
 }
 
 .oa-msg p:first-child { margin-top: 0; }
 .oa-msg p:last-child  { margin-bottom: 0; }
 
-/* 用户消息：中性背景，与原生卡片一致 */
+/* 用户消息 */
 .oa-msg--user {
-  background: var(--oa-bg-secondary);
-  color: var(--oa-text);
+  background: var(--oa-accent);
+  color: var(--oa-text-on-accent);
   align-self: flex-end;
-  border: 1px solid var(--oa-border);
 }
 
-/* AI 消息：透明无边界，融入笔记正文 */
+/* AI 消息 —— 与背景融合 */
 .oa-msg--assistant {
+  background: var(--oa-bg-alt);
   color: var(--oa-text);
-  align-self: stretch;
-  max-width: 100%;
-  padding-left: var(--oa-s-4);
-  padding-right: var(--oa-s-4);
+  align-self: flex-start;
 }
 
-/* 消息内 Markdown 渲染优化 */
+/* 消息内 Markdown */
 .oa-msg--assistant h1,
 .oa-msg--assistant h2,
 .oa-msg--assistant h3 {
@@ -447,10 +365,11 @@
   padding-left: var(--oa-s-20);
 }
 .oa-msg--assistant blockquote {
-  border-left: 2px solid var(--oa-border);
+  border-left: 3px solid var(--oa-border);
   margin: var(--oa-s-8) 0;
   padding: var(--oa-s-4) var(--oa-s-12);
   color: var(--oa-text-muted);
+  background: transparent;
 }
 .oa-msg--assistant a {
   color: var(--oa-text-accent);
@@ -465,18 +384,17 @@
 .oa-msg--assistant td {
   border: 1px solid var(--oa-border);
   padding: var(--oa-s-4) var(--oa-s-8);
-  text-align: left;
 }
 .oa-msg--assistant th {
-  background: var(--oa-bg-secondary);
+  background: var(--oa-bg);
   font-weight: var(--oa-fw-semibold);
 }
 
-/* 代码块 */
+/* 代码块 —— 原生 Obsidian 代码块风格 */
 .oa-msg--assistant pre {
-  background: var(--oa-bg-secondary);
+  background: var(--oa-bg);
   border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
+  border-radius: var(--oa-r-s);
   padding: var(--oa-s-12);
   margin: var(--oa-s-8) 0;
   overflow-x: auto;
@@ -498,61 +416,50 @@
   color: var(--oa-text-error);
   align-self: stretch;
   font-size: var(--oa-fs-xs);
-  border: 1px solid var(--oa-text-error);
-  border-radius: var(--oa-r-m);
-  box-shadow: none;
+  border-radius: var(--oa-r-s);
 }
 
 /* 思考中 */
 .oa-msg--thinking {
-  display: flex;
-  align-items: center;
-  gap: var(--oa-s-8);
-  color: var(--oa-text-muted);
+  color: var(--oa-text-faint);
   font-size: var(--oa-fs-xs);
-  padding: var(--oa-s-8) var(--oa-s-12);
-}
-.oa-msg--thinking::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--oa-text-faint);
-  animation: oa-pulse 1.4s ease-in-out infinite;
+  font-style: italic;
+  padding: var(--oa-s-4) var(--oa-s-12);
 }
 
 /* ==========================================================================
-   WELCOME
+   WELCOME —— 模仿 Obsidian 空状态
    ========================================================================== */
 
 .oa-welcome {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--oa-s-12);
-  margin-top: var(--oa-s-32);
+  gap: var(--oa-s-8);
+  margin-top: var(--oa-s-24);
   padding: 0 var(--oa-s-16);
 }
 
 .oa-welcome__icon {
-  width: 40px;
-  height: 40px;
-  color: var(--oa-text-faint);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--oa-r-s);
+  background: var(--oa-bg-alt);
+  color: var(--oa-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: var(--oa-s-4);
 }
 .oa-welcome__icon svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .oa-welcome__title {
-  font-size: var(--oa-fs-lg);
-  font-weight: var(--oa-fw-bold);
+  font-size: var(--oa-fs-md);
+  font-weight: var(--oa-fw-semibold);
   color: var(--oa-text);
-  letter-spacing: -0.01em;
 }
 
 .oa-welcome__sub {
@@ -560,68 +467,64 @@
   font-size: var(--oa-fs-sm);
   text-align: center;
   line-height: var(--oa-lh);
-  max-width: 300px;
+  max-width: 280px;
 }
 
 .oa-welcome__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--oa-s-8);
+  gap: var(--oa-s-4);
   width: 100%;
-  max-width: 360px;
+  max-width: 320px;
   margin-top: var(--oa-s-12);
 }
 
+/* 欢迎卡片 —— 模仿文件浏览器项 */
 .oa-welcome__card {
   padding: var(--oa-s-12);
-  border-radius: var(--oa-r-m);
-  border: 1px solid var(--oa-border);
+  border-radius: var(--oa-r-s);
+  border: none;
   background: transparent;
   cursor: pointer;
   font-size: var(--oa-fs-sm);
-  color: var(--oa-text);
+  color: var(--oa-text-muted);
   text-align: left;
   line-height: var(--oa-lh-tight);
-  transition: background var(--oa-t-fast);
 }
 .oa-welcome__card:hover {
   background: var(--oa-bg-hover);
+  color: var(--oa-text);
 }
 .oa-welcome__card:active {
   background: var(--oa-bg-active);
 }
 
 /* ==========================================================================
-   INPUT
+   INPUT —— 模仿 Obsidian 原生输入框
    ========================================================================== */
 
 .oa-input__box {
-  margin: var(--oa-s-12);
+  margin: var(--oa-s-8);
   border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
-  background: var(--oa-bg-field);
-  padding: var(--oa-s-12);
+  border-radius: var(--oa-r-s);
+  background: var(--oa-bg);
+  padding: var(--oa-s-8);
   display: flex;
   flex-direction: column;
   gap: var(--oa-s-8);
-  transition: border-color var(--oa-t-fast);
-}
-.oa-input__box:hover {
-  border-color: var(--oa-border-hover);
 }
 .oa-input__box:focus-within {
-  border-color: var(--oa-border-focus);
+  border-color: var(--oa-border-f);
 }
 .oa-input__box--dragover {
-  border-color: var(--oa-border-focus);
-  background: var(--oa-bg-hover);
+  border-color: var(--oa-accent);
 }
 
 .oa-input__textarea {
   width: 100%;
   resize: none;
-  min-height: 40px;
-  max-height: 180px;
+  min-height: 36px;
+  max-height: 160px;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -650,23 +553,21 @@
   font-size: var(--oa-fs-xs);
   padding: var(--oa-s-4) var(--oa-s-8);
   border-radius: var(--oa-r-s);
-  max-width: 150px;
-  background: var(--oa-bg);
+  max-width: 140px;
+  background: transparent;
   border: 1px solid var(--oa-border);
   color: var(--oa-text-muted);
   cursor: pointer;
-  font-weight: var(--oa-fw-semibold);
 }
 .oa-input__model:hover {
-  border-color: var(--oa-border-hover);
+  background: var(--oa-bg-hover);
   color: var(--oa-text);
 }
 
 .oa-input__badge {
   font-size: var(--oa-fs-xs);
   color: var(--oa-text-muted);
-  background: var(--oa-bg);
-  border: 1px solid var(--oa-border);
+  background: var(--oa-bg-alt);
   border-radius: var(--oa-r-s);
   padding: var(--oa-s-4) var(--oa-s-8);
   white-space: nowrap;
@@ -679,15 +580,13 @@
   height: 14px;
 }
 
-.oa-input__toolbar-spacer {
-  flex: 1;
-}
+.oa-input__toolbar-spacer { flex: 1; }
 
-/* 发送按钮 */
+/* 发送按钮 —— 唯一强调色按钮 */
 .oa-input__send {
-  width: 32px;
-  height: 32px;
-  border-radius: var(--oa-r-m);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--oa-r-s);
   border: none;
   background: var(--oa-accent);
   color: var(--oa-text-on-accent);
@@ -698,24 +597,27 @@
   flex-shrink: 0;
 }
 .oa-input__send svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 .oa-input__send:hover {
   background: var(--oa-accent-h);
 }
+.oa-input__send:active {
+  background: var(--oa-accent-h);
+}
 .oa-input__send:disabled {
-  opacity: 0.4;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
-/* 停止按钮 */
+/* 停止按钮 —— 文字按钮，无强调色 */
 .oa-input__stop {
-  border: 1px solid var(--oa-text-error);
-  border-radius: var(--oa-r-m);
-  background: transparent;
-  color: var(--oa-text-error);
-  padding: var(--oa-s-8) var(--oa-s-12);
+  border: none;
+  border-radius: var(--oa-r-s);
+  background: var(--oa-bg-hover);
+  color: var(--oa-text-muted);
+  padding: var(--oa-s-4) var(--oa-s-12);
   font-size: var(--oa-fs-xs);
   font-weight: var(--oa-fw-semibold);
   cursor: pointer;
@@ -723,26 +625,25 @@
   display: flex;
   align-items: center;
   gap: var(--oa-s-4);
-  transition: all var(--oa-t-fast);
 }
 .oa-input__stop svg {
   width: 14px;
   height: 14px;
 }
 .oa-input__stop:hover {
-  background: var(--oa-bg-error);
-  border-color: var(--oa-text-error);
+  background: var(--oa-bg-active);
+  color: var(--oa-text);
 }
 
 /* ==========================================================================
-   MODE BUTTON
+   MODE BUTTON —— 模仿 Obsidian 工具栏按钮
    ========================================================================== */
 
 .oa-mode-btn {
   font-size: var(--oa-fs-xs);
   padding: var(--oa-s-4) var(--oa-s-8);
   border-radius: var(--oa-r-s);
-  border: 1px solid var(--oa-border);
+  border: none;
   background: transparent;
   color: var(--oa-text-muted);
   cursor: pointer;
@@ -750,7 +651,7 @@
   display: flex;
   align-items: center;
   gap: var(--oa-s-4);
-  font-weight: var(--oa-fw-semibold);
+  font-weight: var(--oa-fw-normal);
 }
 .oa-mode-btn svg {
   width: 14px;
@@ -763,9 +664,9 @@
 .oa-mode-btn:active {
   background: var(--oa-bg-active);
 }
+/* 激活态 —— 唯一强调色 */
 .oa-mode-btn--active {
   background: var(--oa-accent);
-  border-color: var(--oa-accent);
   color: var(--oa-text-on-accent);
 }
 .oa-mode-btn--active:hover {
@@ -774,14 +675,14 @@
 }
 
 /* ==========================================================================
-   CHIPS
+   CHIPS —— 模仿 Obsidian tag
    ========================================================================== */
 
 .oa-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--oa-s-8);
-  padding: 0 var(--oa-s-16) var(--oa-s-4);
+  gap: var(--oa-s-4);
+  padding: 0 var(--oa-s-12);
 }
 
 .oa-chip {
@@ -789,56 +690,50 @@
   align-items: center;
   gap: var(--oa-s-4);
   font-size: var(--oa-fs-xs);
-  background: var(--oa-bg);
-  border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
-  padding: var(--oa-s-4) var(--oa-s-12);
+  background: var(--oa-bg-alt);
+  border: none;
+  border-radius: var(--oa-r-s);
+  padding: var(--oa-s-4) var(--oa-s-8);
   color: var(--oa-text-muted);
   line-height: var(--oa-lh-tight);
-  transition: all var(--oa-t-fast);
-}
-.oa-chip:hover {
-  border-color: var(--oa-border-hover);
-  background: var(--oa-bg-secondary);
 }
 .oa-chip svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 .oa-chip__remove {
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--oa-r-s);
   margin-left: var(--oa-s-4);
-  transition: all var(--oa-t-fast);
+  color: var(--oa-text-faint);
   font-weight: var(--oa-fw-bold);
 }
 .oa-chip__remove:hover {
+  background: var(--oa-bg-hover);
   color: var(--oa-text-error);
-  background: var(--oa-bg-error);
 }
 
 /* ==========================================================================
-   POPUP
+   POPUP —— 模仿 Obsidian suggest 弹窗
    ========================================================================== */
 
 .oa-popup {
   position: absolute;
-  left: var(--oa-s-12);
-  right: var(--oa-s-12);
-  bottom: 130px;
-  max-height: 220px;
+  left: var(--oa-s-8);
+  right: var(--oa-s-8);
+  bottom: 120px;
+  max-height: 200px;
   overflow-y: auto;
-  background: var(--oa-bg-secondary);
+  background: var(--oa-bg);
   border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
-  box-shadow: var(--shadow-s);
+  border-radius: var(--oa-r-s);
   z-index: 10;
 }
 
@@ -849,22 +744,13 @@
   padding: var(--oa-s-8) var(--oa-s-12);
   cursor: pointer;
   font-size: var(--oa-fs-sm);
-  transition: background var(--oa-t-fast);
-  border-radius: var(--oa-r-s);
-  margin: 2px var(--oa-s-4);
-}
-.oa-popup__item:first-child {
-  margin-top: var(--oa-s-4);
-}
-.oa-popup__item:last-child {
-  margin-bottom: var(--oa-s-4);
 }
 .oa-popup__item:hover,
 .oa-popup__item--active {
   background: var(--oa-bg-hover);
 }
 .oa-popup__name {
-  font-weight: var(--oa-fw-semibold);
+  font-weight: var(--oa-fw-normal);
   white-space: nowrap;
   color: var(--oa-text);
 }
@@ -887,14 +773,15 @@
    CODE ACTIONS
    ========================================================================== */
 
+.oa-msg pre { position: relative; }
+
 .oa-code-actions {
   position: absolute;
-  top: var(--oa-s-8);
-  right: var(--oa-s-8);
+  top: var(--oa-s-4);
+  right: var(--oa-s-4);
   display: flex;
   gap: var(--oa-s-4);
   opacity: 0;
-  transition: opacity var(--oa-t-fast);
 }
 .oa-msg pre:hover .oa-code-actions {
   opacity: 1;
@@ -903,44 +790,53 @@
   font-size: var(--oa-fs-xs);
   padding: var(--oa-s-4) var(--oa-s-8);
   border-radius: var(--oa-r-s);
-  border: 1px solid var(--oa-border);
-  background: var(--oa-bg);
+  border: none;
+  background: var(--oa-bg-hover);
   color: var(--oa-text-muted);
   cursor: pointer;
-  font-weight: var(--oa-fw-semibold);
+  font-weight: var(--oa-fw-normal);
 }
 .oa-code-actions__btn:hover {
-  background: var(--oa-bg-hover);
+  background: var(--oa-bg-active);
   color: var(--oa-text);
-  border-color: var(--oa-border-hover);
 }
 
 /* ==========================================================================
-   HISTORY
+   HISTORY —— 模仿文件浏览器列表
    ========================================================================== */
 
 .oa-history {
   flex: 1;
   overflow-y: auto;
-  padding: var(--oa-s-12);
+  padding: var(--oa-s-4);
   display: flex;
   flex-direction: column;
-  gap: var(--oa-s-4);
+  gap: 0;
 }
 
+/* 历史行 —— 模仿文件浏览器项 */
 .oa-history__row {
   position: relative;
   padding: var(--oa-s-8) var(--oa-s-12);
-  border-radius: var(--oa-r-m);
+  border-radius: var(--oa-r-s);
+  border: none;
   cursor: pointer;
-  transition: background var(--oa-t-fast);
 }
 .oa-history__row:hover {
   background: var(--oa-bg-hover);
 }
-.oa-history__row--active,
-.oa-history__row--active:hover {
+.oa-history__row--active {
   background: var(--oa-bg-active);
+}
+.oa-history__row--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--oa-text-accent);
+  border-radius: 0;
 }
 
 .oa-history__body {
@@ -958,21 +854,22 @@
 .oa-history__title {
   flex: 1;
   font-size: var(--oa-fs-sm);
-  font-weight: var(--oa-fw-semibold);
+  font-weight: var(--oa-fw-normal);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--oa-text);
 }
+.oa-history__row--active .oa-history__title {
+  font-weight: var(--oa-fw-semibold);
+}
 
 .oa-history__count {
   font-size: var(--oa-fs-xs);
-  background: var(--oa-bg);
-  border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
-  padding: 1px var(--oa-s-8);
-  color: var(--oa-text-muted);
-  font-weight: var(--oa-fw-semibold);
+  background: transparent;
+  border: none;
+  color: var(--oa-text-faint);
+  font-weight: var(--oa-fw-normal);
   flex-shrink: 0;
 }
 
@@ -983,14 +880,14 @@
 
 .oa-history__actions {
   position: absolute;
-  right: var(--oa-s-8);
+  right: var(--oa-s-4);
   top: 50%;
   transform: translateY(-50%);
   display: none;
-  gap: 2px;
-  background: var(--oa-bg-secondary);
-  border-radius: var(--oa-r-m);
-  padding: var(--oa-s-4);
+  gap: 0;
+  background: var(--oa-bg);
+  border-radius: var(--oa-r-s);
+  padding: 2px;
   border: 1px solid var(--oa-border);
 }
 .oa-history__row:hover .oa-history__actions {
@@ -1002,20 +899,20 @@
   font-size: var(--oa-fs-sm);
   padding: var(--oa-s-4) var(--oa-s-8);
   border-radius: var(--oa-r-s);
-  border: 1px solid var(--oa-border-focus);
+  border: 1px solid var(--oa-accent);
   background: var(--oa-bg);
   color: var(--oa-text);
 }
 
 /* ==========================================================================
-   MODAL
+   MODAL —— Obsidian 原生 Modal 内容
    ========================================================================== */
 
 .oa-modal {
   display: flex;
   flex-direction: column;
-  gap: var(--oa-s-16);
-  padding: var(--oa-s-8) 0;
+  gap: var(--oa-s-12);
+  padding: var(--oa-s-4) 0;
 }
 
 .oa-modal__title {
@@ -1023,29 +920,24 @@
   font-size: var(--oa-fs-md);
   font-weight: var(--oa-fw-semibold);
   color: var(--oa-text);
-  letter-spacing: -0.01em;
 }
 
 .oa-modal__body {
   width: 100%;
   resize: vertical;
   min-height: 60px;
-  border-radius: var(--oa-r-m);
+  border-radius: var(--oa-r-s);
   border: 1px solid var(--oa-border);
   background: var(--oa-bg);
   color: var(--oa-text);
   font-size: var(--oa-fs-sm);
   font-family: var(--oa-font);
-  padding: var(--oa-s-12);
+  padding: var(--oa-s-8);
   line-height: var(--oa-lh);
-  transition: border-color var(--oa-t-fast), box-shadow var(--oa-t-fast);
-}
-.oa-modal__body:hover {
-  border-color: var(--oa-border-hover);
 }
 .oa-modal__body:focus {
-  border-color: var(--oa-border-focus);
-  box-shadow: none;
+  border-color: var(--oa-accent);
+  box-shadow: 0 0 0 1px var(--oa-accent);
 }
 
 .oa-modal__actions {
@@ -1062,28 +954,28 @@
   max-height: 50vh;
   overflow-y: auto;
   border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
+  border-radius: var(--oa-r-s);
   font-family: var(--oa-font-mono);
   font-size: var(--oa-fs-xs);
-  padding: var(--oa-s-8) 0;
+  padding: var(--oa-s-4) 0;
   background: var(--oa-bg);
 }
 
 .oa-diff__line {
   display: flex;
   gap: var(--oa-s-8);
-  padding: 2px var(--oa-s-12);
+  padding: 1px var(--oa-s-12);
   white-space: pre-wrap;
   word-break: break-all;
   line-height: var(--oa-lh-tight);
 }
 .oa-diff__mark {
-  width: 1.2em;
+  width: 1em;
   flex: 0 0 auto;
   text-align: center;
   font-weight: var(--oa-fw-bold);
   user-select: none;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 .oa-diff__line--add {
   background: var(--oa-bg-success);
@@ -1099,7 +991,7 @@
 }
 .oa-diff__line--del span:last-child {
   text-decoration: line-through;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 /* ==========================================================================
@@ -1120,8 +1012,6 @@
   display: flex;
   align-items: center;
   gap: var(--oa-s-4);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .oa-edit-cards__title svg {
   width: 14px;
@@ -1130,16 +1020,12 @@
 
 .oa-edit-card {
   border: 1px solid var(--oa-border);
-  border-radius: var(--oa-r-m);
+  border-radius: var(--oa-r-s);
   padding: var(--oa-s-12);
   background: var(--oa-bg);
   display: flex;
   flex-direction: column;
   gap: var(--oa-s-8);
-  transition: border-color var(--oa-t-fast);
-}
-.oa-edit-card:hover {
-  border-color: var(--oa-border-hover);
 }
 
 .oa-edit-card__head {
@@ -1149,13 +1035,11 @@
 }
 
 .oa-edit-card__action {
-  font-size: 10px;
-  font-weight: var(--oa-fw-bold);
+  font-size: var(--oa-fs-xs);
+  font-weight: var(--oa-fw-semibold);
   border-radius: var(--oa-r-s);
-  padding: 2px var(--oa-s-8);
+  padding: 1px var(--oa-s-8);
   white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 .oa-edit-card__action--replace {
   background: var(--oa-bg-warning);
@@ -1166,9 +1050,8 @@
   color: var(--oa-text-success);
 }
 .oa-edit-card__action--write {
-  color: var(--oa-text-muted);
-  background: var(--oa-bg);
-  border: 1px solid var(--oa-border);
+  color: var(--oa-text-accent);
+  background: var(--oa-bg-alt);
 }
 
 .oa-edit-card__path {
@@ -1187,7 +1070,7 @@
   font-family: var(--oa-font-mono);
   font-size: var(--oa-fs-xs);
   padding: var(--oa-s-4) 0;
-  background: var(--oa-bg-secondary);
+  background: var(--oa-bg);
 }
 
 .oa-edit-card__btns {
@@ -1208,7 +1091,7 @@
   max-height: 120px;
   overflow-y: auto;
   font-family: var(--oa-font-mono);
-  background: var(--oa-bg-secondary);
+  background: var(--oa-bg-alt);
   border-radius: var(--oa-r-s);
   padding: var(--oa-s-8);
   color: var(--oa-text-muted);
@@ -1222,7 +1105,7 @@
   color: var(--oa-text-muted);
   font-size: var(--oa-fs-xs);
   line-height: var(--oa-lh);
-  padding-top: var(--oa-s-16);
+  padding-top: var(--oa-s-12);
   border-top: 1px solid var(--oa-border);
-  margin-top: var(--oa-s-16);
+  margin-top: var(--oa-s-12);
 }
