@@ -25,12 +25,11 @@ import { lineDiff } from "./diff";
 
 export const VIEW_TYPE_NOTEPILOT = "notepilot-chat-view";
 
-type PanelState = "chat" | "history";
-
 export class NotePilotView extends ItemView {
 	plugin: NotePilotPlugin;
-	private state: PanelState = "chat";
+	private sidebarOpen = false;
 	private messagesEl!: HTMLElement;
+	private chatContentEl: HTMLElement | null = null;
 	private inputEl!: HTMLTextAreaElement;
 	private sendBtn!: HTMLButtonElement;
 	private stopBtn!: HTMLButtonElement;
@@ -81,11 +80,14 @@ export class NotePilotView extends ItemView {
 			this.renderLogin(root);
 			return;
 		}
-		if (this.state === "history") {
-			this.renderHistory(root);
-		} else {
-			this.renderChat(root);
+		// 活动栏（登录后始终可见）
+		this.renderActivityBar(root);
+		// 主区域 = 可选侧边栏 + 聊天内容
+		const main = root.createDiv({ cls: "oa-main" });
+		if (this.sidebarOpen) {
+			this.renderSidebar(main);
 		}
+		this.renderChat(main);
 	}
 
 	// ============ 登录页 ============
@@ -224,34 +226,79 @@ export class NotePilotView extends ItemView {
 		keyInput.focus();
 	}
 
-	// ============ 历史会话列表（参照 Continue History 页） ============
+	// ============ 活动栏（JetBrains 左侧图标条） ============
 
-	private renderHistory(root: HTMLElement): void {
-		const header = root.createDiv({ cls: "oa-header" });
-		const backBtn = header.createEl("button", {
-			cls: "oa-header__btn",
-			attr: { title: "返回聊天" },
+	private renderActivityBar(root: HTMLElement): void {
+		const bar = root.createDiv({ cls: "oa-actbar" });
+
+		// 顶部图标
+		const chatBtn = bar.createEl("button", {
+			cls: "oa-actbar__btn oa-actbar__btn--active",
+			attr: { title: "聊天" },
 		});
-		setIcon(backBtn, "arrow-left");
-		backBtn.addEventListener("click", () => {
-			this.state = "chat";
+		setIcon(chatBtn, "message-square");
+
+		const historyBtn = bar.createEl("button", {
+			cls: `oa-actbar__btn${this.sidebarOpen ? " oa-actbar__btn--active" : ""}`,
+			attr: { title: "历史会话" },
+		});
+		setIcon(historyBtn, "clock");
+		historyBtn.addEventListener("click", () => {
+			this.sidebarOpen = !this.sidebarOpen;
 			this.render();
 		});
-		header.createDiv({ cls: "oa-header__title", text: "历史会话" });
-		header.createDiv({ cls: "oa-header__spacer" });
 
-		const newBtn = header.createEl("button", {
-			cls: "oa-header__btn",
-			attr: { title: "新对话" },
+		const newBtn = bar.createEl("button", {
+			cls: "oa-actbar__btn",
+			attr: { title: "新建对话" },
 		});
-		setIcon(newBtn, "plus");
+		setIcon(newBtn, "plus-square");
 		newBtn.addEventListener("click", () => {
 			this.plugin.newSession();
-			this.state = "chat";
+			this.attachedFiles = [];
 			this.render();
 		});
 
-		const list = root.createDiv({ cls: "oa-history" });
+		// 底部图标
+		bar.createDiv({ cls: "oa-actbar__spacer" });
+
+		const settingsBtn = bar.createEl("button", {
+			cls: "oa-actbar__btn",
+			attr: { title: "设置" },
+		});
+		setIcon(settingsBtn, "settings");
+		settingsBtn.addEventListener("click", () => {
+			(this.app as any).setting?.open();
+		});
+
+		const logoutBtn = bar.createEl("button", {
+			cls: "oa-actbar__btn oa-actbar__btn--danger",
+			attr: { title: "退出登录" },
+		});
+		setIcon(logoutBtn, "log-out");
+		logoutBtn.addEventListener("click", () => this.logout());
+	}
+
+	// ============ 历史会话侧边栏（JetBrains 项目树风格） ============
+
+	private renderSidebar(main: HTMLElement): void {
+		const sidebar = main.createDiv({ cls: "oa-sidebar" });
+
+		// 侧边栏头部
+		const header = sidebar.createDiv({ cls: "oa-sidebar__header" });
+		header.createDiv({ cls: "oa-sidebar__title", text: "会话" });
+		const closeBtn = header.createEl("button", {
+			cls: "oa-sidebar__action",
+			attr: { title: "关闭侧边栏" },
+		});
+		setIcon(closeBtn, "x");
+		closeBtn.addEventListener("click", () => {
+			this.sidebarOpen = false;
+			this.render();
+		});
+
+		// 会话列表
+		const list = sidebar.createDiv({ cls: "oa-sidebar__list" });
 		const sessions = [...this.plugin.sessions].sort(
 			(a, b) => b.updatedAt - a.updatedAt
 		);
@@ -261,28 +308,28 @@ export class NotePilotView extends ItemView {
 		}
 
 		for (const s of sessions) {
-			const row = list.createDiv({ cls: "oa-history__row" });
+			const row = list.createDiv({ cls: "oa-sidebar__row" });
 			if (s.id === this.plugin.currentSessionId) {
-				row.addClass("oa-history__row--active");
+				row.addClass("oa-sidebar__row--active");
 			}
 
-			const body = row.createDiv({ cls: "oa-history__body" });
-			const titleRow = body.createDiv({ cls: "oa-history__title-row" });
+			const body = row.createDiv({ cls: "oa-sidebar__body" });
+			const titleRow = body.createDiv({ cls: "oa-sidebar__title-row" });
 			const titleEl = titleRow.createSpan({
-				cls: "oa-history__title",
+				cls: "oa-sidebar__name",
 				text: s.title,
 			});
 			const count = s.messages.filter((m) => m.role !== "error").length;
-			titleRow.createSpan({ cls: "oa-history__count", text: String(count) });
+			titleRow.createSpan({ cls: "oa-sidebar__count", text: String(count) });
 			body.createDiv({
-				cls: "oa-history__date",
+				cls: "oa-sidebar__date",
 				text: formatDate(s.updatedAt),
 			});
 
 			// hover 操作按钮：重命名 / 导出 Markdown / 删除
-			const actions = row.createDiv({ cls: "oa-history__actions" });
+			const actions = row.createDiv({ cls: "oa-sidebar__actions" });
 			const editBtn = actions.createEl("button", {
-				cls: "oa-header__btn",
+				cls: "oa-sidebar__action",
 				attr: { title: "重命名" },
 			});
 			setIcon(editBtn, "pencil");
@@ -292,7 +339,7 @@ export class NotePilotView extends ItemView {
 			});
 
 			const exportBtn = actions.createEl("button", {
-				cls: "oa-header__btn",
+				cls: "oa-sidebar__action",
 				attr: { title: "导出为 Markdown" },
 			});
 			setIcon(exportBtn, "download");
@@ -302,7 +349,7 @@ export class NotePilotView extends ItemView {
 			});
 
 			const delBtn = actions.createEl("button", {
-				cls: "oa-header__btn oa-header__btn--danger",
+				cls: "oa-sidebar__action oa-sidebar__action--danger",
 				attr: { title: "删除" },
 			});
 			setIcon(delBtn, "trash-2");
@@ -316,7 +363,7 @@ export class NotePilotView extends ItemView {
 
 			row.addEventListener("click", () => {
 				this.plugin.switchSession(s.id);
-				this.state = "chat";
+				this.sidebarOpen = false;
 				this.render();
 			});
 		}
@@ -328,7 +375,7 @@ export class NotePilotView extends ItemView {
 		const input = document.createElement("input");
 		input.type = "text";
 		input.value = session.title;
-		input.addClass("oa-history__rename");
+		input.addClass("oa-sidebar__rename");
 		titleEl.replaceWith(input);
 		input.focus();
 		input.select();
@@ -361,45 +408,43 @@ export class NotePilotView extends ItemView {
 		await leaf.openFile(file);
 	}
 
-	// ============ 聊天页 ============
+	// ============ 聊天页（JetBrains 工具窗口风格） ============
 
-	private renderChat(root: HTMLElement): void {
-		const header = root.createDiv({ cls: "oa-header" });
-		const title = header.createDiv({ cls: "oa-header__title" });
+	private renderChat(main: HTMLElement): void {
+		const content = main.createDiv({ cls: "oa-content" });
+		this.chatContentEl = content;
+
+		// 标题栏
+		const titlebar = content.createDiv({ cls: "oa-titlebar" });
+		const title = titlebar.createDiv({ cls: "oa-titlebar__title" });
 		setIcon(title, "sparkles");
 		title.createSpan({ text: "ObsidianAI" });
-		header.createDiv({ cls: "oa-header__spacer" });
+		titlebar.createDiv({ cls: "oa-titlebar__spacer" });
 
-		const historyBtn = header.createEl("button", {
-			cls: "oa-header__btn",
-			attr: { title: "历史会话" },
+		// Agent 模式开关
+		const agentBtn = titlebar.createEl("button", {
+			cls: "oa-mode-btn",
 		});
-		setIcon(historyBtn, "history");
-		historyBtn.addEventListener("click", () => {
-			this.state = "history";
-			this.render();
+		setIcon(agentBtn, "bot");
+		agentBtn.createSpan({ text: " Agent" });
+		agentBtn.setAttribute("title", "Agent 模式：AI 可建议创建/修改库内文件（需你审批）");
+		const syncAgentBtn = () =>
+			agentBtn.toggleClass("oa-mode-btn--active", this.plugin.settings.agentMode);
+		syncAgentBtn();
+		agentBtn.addEventListener("click", () => {
+			this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
+			void this.plugin.saveAll();
+			syncAgentBtn();
+			this.renderStatusBar?.(content);
+			new Notice(
+				this.plugin.settings.agentMode
+					? "Agent 模式已开启：AI 可提出文件修改建议"
+					: "Agent 模式已关闭"
+			);
 		});
-
-		const newBtn = header.createEl("button", {
-			cls: "oa-header__btn",
-			attr: { title: "新对话" },
-		});
-		setIcon(newBtn, "plus");
-		newBtn.addEventListener("click", () => {
-			this.plugin.newSession();
-			this.attachedFiles = [];
-			this.render();
-		});
-
-		const logoutBtn = header.createEl("button", {
-			cls: "oa-header__btn",
-			attr: { title: "退出登录" },
-		});
-		setIcon(logoutBtn, "log-out");
-		logoutBtn.addEventListener("click", () => this.logout());
 
 		// 消息区
-		this.messagesEl = root.createDiv({ cls: "oa-chat__messages" });
+		this.messagesEl = content.createDiv({ cls: "oa-chat__messages" });
 		this.renderMessages();
 
 		// 自动识别划词：渲染聊天界面时消费暂存的选区文本
@@ -409,11 +454,11 @@ export class NotePilotView extends ItemView {
 		}
 
 		// 附加文件 chips
-		this.chipsEl = root.createDiv({ cls: "oa-chips" });
+		this.chipsEl = content.createDiv({ cls: "oa-chips" });
 		this.renderChips();
 
 		// 输入盒
-		const inputBox = root.createDiv({ cls: "oa-input__box" });
+		const inputBox = content.createDiv({ cls: "oa-input__box" });
 		this.inputEl = inputBox.createEl("textarea", {
 			cls: "oa-input__textarea",
 			attr: {
@@ -462,7 +507,7 @@ export class NotePilotView extends ItemView {
 
 		// 从 API 拉取可用模型列表
 		const refreshModelsBtn = toolbar.createEl("button", {
-			cls: "oa-header__btn",
+			cls: "oa-titlebar__btn",
 			attr: { title: "从 API 拉取可用模型列表" },
 		});
 		setIcon(refreshModelsBtn, "refresh-cw");
@@ -478,27 +523,6 @@ export class NotePilotView extends ItemView {
 			badge.createSpan({ text: " 当前笔记" });
 			badge.setAttribute("title", "提问时将附带当前笔记内容");
 		}
-
-		// Agent 模式开关：开启后 AI 可提出文件修改建议（需审批）
-		const agentBtn = toolbar.createEl("button", {
-			cls: "oa-mode-btn",
-		});
-		setIcon(agentBtn, "bot");
-		agentBtn.createSpan({ text: " Agent" });
-		agentBtn.setAttribute("title", "Agent 模式：AI 可建议创建/修改库内文件（需你审批）");
-		const syncAgentBtn = () =>
-			agentBtn.toggleClass("oa-mode-btn--active", this.plugin.settings.agentMode);
-		syncAgentBtn();
-		agentBtn.addEventListener("click", () => {
-			this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
-			void this.plugin.saveAll();
-			syncAgentBtn();
-			new Notice(
-				this.plugin.settings.agentMode
-					? "Agent 模式已开启：AI 可提出文件修改建议"
-					: "Agent 模式已关闭"
-			);
-		});
 
 		toolbar.createDiv({ cls: "oa-input__toolbar-spacer" });
 
@@ -518,7 +542,44 @@ export class NotePilotView extends ItemView {
 		this.inputEl.addEventListener("keydown", (e) => this.onInputKeydown(e));
 		this.inputEl.addEventListener("input", () => this.onInput());
 
+		// 状态栏
+		this.renderStatusBar(content);
+
 		if (this.generating) this.setBusy(true);
+	}
+
+	// ============ 状态栏 ============
+
+	private renderStatusBar(content: HTMLElement): void {
+		content.querySelectorAll(".oa-statusbar").forEach((el) => el.remove());
+		const bar = content.createDiv({ cls: "oa-statusbar" });
+
+		// 左：模型名称
+		const modelItem = bar.createSpan({ cls: "oa-statusbar__item" });
+		setIcon(modelItem, "cpu");
+		modelItem.createSpan({ text: this.plugin.settings.model });
+
+		// 分隔符
+		bar.createSpan({ cls: "oa-statusbar__sep" });
+
+		// 中：Agent 模式
+		if (this.plugin.settings.agentMode) {
+			const agentItem = bar.createSpan({ cls: "oa-statusbar__item oa-statusbar__item--accent" });
+			setIcon(agentItem, "bot");
+			agentItem.createSpan({ text: "Agent" });
+			bar.createSpan({ cls: "oa-statusbar__sep" });
+		}
+
+		// 右：当前笔记状态
+		if (this.plugin.settings.includeActiveNote) {
+			const noteItem = bar.createSpan({ cls: "oa-statusbar__item" });
+			setIcon(noteItem, "file-text");
+			noteItem.createSpan({ text: "笔记上下文" });
+		}
+
+		// 最右：服务商
+		const providerLabel = PROVIDER_PRESETS[this.plugin.settings.provider].label;
+		bar.createSpan({ cls: "oa-statusbar__item oa-statusbar__item--right", text: providerLabel });
 	}
 
 	private renderMessages(): void {
@@ -836,8 +897,8 @@ export class NotePilotView extends ItemView {
 		this.popupIndex = 0;
 
 		if (!this.popupEl) {
-			const root = this.containerEl.children[1] as HTMLElement;
-			this.popupEl = root.createDiv({ cls: "oa-popup" });
+			const target = this.chatContentEl ?? (this.containerEl.children[1] as HTMLElement);
+			this.popupEl = target.createDiv({ cls: "oa-popup" });
 		}
 		this.popupEl.empty();
 		if (files.length === 0) {

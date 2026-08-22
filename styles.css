@@ -61,7 +61,7 @@
 
 .oa-view {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
   font-family: var(--oa-font);
   color: var(--oa-text);
@@ -122,6 +122,241 @@
   width: 28px;
   height: 28px;
   opacity: 0.3;
+}
+
+/* ==========================================================================
+   ACTIVITY BAR —— JetBrains 左侧图标条
+   ========================================================================== */
+
+.oa-actbar {
+  width: 34px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--oa-s-4) 0;
+  gap: var(--oa-s-4);
+  border-right: 1px solid var(--oa-border);
+  background: var(--oa-bg-alt);
+}
+
+.oa-actbar__btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: var(--oa-r-s);
+  color: var(--oa-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+.oa-actbar__btn svg {
+  width: 16px;
+  height: 16px;
+}
+.oa-actbar__btn:hover {
+  background: var(--oa-bg-hover);
+  color: var(--oa-text);
+}
+.oa-actbar__btn--active {
+  color: var(--oa-text-accent);
+}
+.oa-actbar__btn--active::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  background: var(--oa-text-accent);
+  border-radius: 0;
+}
+.oa-actbar__btn--danger:hover {
+  color: var(--oa-text-error);
+}
+.oa-actbar__spacer { flex: 1; }
+
+/* ==========================================================================
+   MAIN —— 主区域容器（活动栏右侧）
+   ========================================================================== */
+
+.oa-main {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   SIDEBAR —— 历史会话侧边栏（JetBrains 项目树风格）
+   ========================================================================== */
+
+.oa-sidebar {
+  width: 184px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--oa-border);
+  background: var(--oa-bg-alt);
+  overflow: hidden;
+}
+
+.oa-sidebar__header {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  padding: var(--oa-s-4) var(--oa-s-8);
+  border-bottom: 1px solid var(--oa-border);
+  flex-shrink: 0;
+  height: 30px;
+}
+
+.oa-sidebar__title {
+  flex: 1;
+  font-size: var(--oa-fs-xs);
+  font-weight: var(--oa-fw-semibold);
+  color: var(--oa-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.oa-sidebar__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--oa-s-4);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* 会话行 —— JetBrains 树节点风格 */
+.oa-sidebar__row {
+  position: relative;
+  padding: var(--oa-s-4) var(--oa-s-8);
+  border-radius: var(--oa-r-s);
+  border: none;
+  cursor: pointer;
+}
+.oa-sidebar__row:hover {
+  background: var(--oa-bg-hover);
+}
+.oa-sidebar__row--active {
+  background: var(--oa-bg-active);
+}
+.oa-sidebar__row--active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  background: var(--oa-text-accent);
+  border-radius: 0;
+}
+
+.oa-sidebar__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--oa-s-4);
+}
+
+.oa-sidebar__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-8);
+}
+
+.oa-sidebar__name {
+  flex: 1;
+  font-size: var(--oa-fs-xs);
+  font-weight: var(--oa-fw-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--oa-text);
+}
+.oa-sidebar__row--active .oa-sidebar__name {
+  font-weight: var(--oa-fw-semibold);
+}
+
+.oa-sidebar__count {
+  font-size: var(--oa-fs-xs);
+  background: transparent;
+  border: none;
+  color: var(--oa-text-faint);
+  font-weight: var(--oa-fw-normal);
+  flex-shrink: 0;
+}
+
+.oa-sidebar__date {
+  font-size: var(--oa-fs-xs);
+  color: var(--oa-text-faint);
+}
+
+.oa-sidebar__actions {
+  position: absolute;
+  right: var(--oa-s-4);
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  gap: 0;
+  background: var(--oa-bg);
+  border-radius: var(--oa-r-s);
+  padding: 2px;
+  border: 1px solid var(--oa-border);
+}
+.oa-sidebar__row:hover .oa-sidebar__actions {
+  display: flex;
+}
+
+.oa-sidebar__action {
+  background: transparent;
+  border: none;
+  border-radius: var(--oa-r-s);
+  padding: var(--oa-s-4);
+  cursor: pointer;
+  color: var(--oa-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.oa-sidebar__action svg {
+  width: 14px;
+  height: 14px;
+}
+.oa-sidebar__action:hover {
+  background: var(--oa-bg-hover);
+  color: var(--oa-text);
+}
+.oa-sidebar__action--danger:hover {
+  color: var(--oa-text-error);
+}
+
+.oa-sidebar__rename {
+  width: 100%;
+  font-size: var(--oa-fs-xs);
+  padding: var(--oa-s-4) var(--oa-s-8);
+  border-radius: var(--oa-r-s);
+  border: 1px solid var(--oa-accent);
+  background: var(--oa-bg);
+  color: var(--oa-text);
+}
+
+/* ==========================================================================
+   CONTENT —— 聊天主区域
+   ========================================================================== */
+
+.oa-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--oa-bg);
+  position: relative;
 }
 
 /* ==========================================================================
@@ -252,37 +487,40 @@
 }
 
 /* ==========================================================================
-   HEADER —— 模仿 Obsidian 面板顶栏
+   TITLE BAR —— JetBrains 工具窗口标题栏
    ========================================================================== */
 
-.oa-header {
+.oa-titlebar {
   display: flex;
   align-items: center;
   gap: var(--oa-s-4);
-  padding: var(--oa-s-8) var(--oa-s-12);
+  padding: var(--oa-s-4) var(--oa-s-8);
   border-bottom: 1px solid var(--oa-border);
   flex-shrink: 0;
-  -webkit-app-region: no-drag;
+  background: var(--oa-bg-alt);
+  height: 30px;
 }
 
-.oa-header__title {
+.oa-titlebar__title {
   display: flex;
   align-items: center;
   gap: var(--oa-s-8);
+  font-size: var(--oa-fs-xs);
   font-weight: var(--oa-fw-semibold);
-  font-size: var(--oa-fs-sm);
+  color: var(--oa-text-muted);
   flex: 1;
-  color: var(--oa-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
-.oa-header__title svg {
-  width: 16px;
-  height: 16px;
+.oa-titlebar__title svg {
+  width: 14px;
+  height: 14px;
   color: var(--oa-text-muted);
 }
 
-.oa-header__spacer { flex: 1; }
+.oa-titlebar__spacer { flex: 1; }
 
-.oa-header__btn {
+.oa-titlebar__btn {
   background: transparent;
   border: none;
   border-radius: var(--oa-r-s);
@@ -293,18 +531,18 @@
   align-items: center;
   justify-content: center;
 }
-.oa-header__btn svg {
+.oa-titlebar__btn svg {
   width: 16px;
   height: 16px;
 }
-.oa-header__btn:hover {
+.oa-titlebar__btn:hover {
   background: var(--oa-bg-hover);
   color: var(--oa-text);
 }
-.oa-header__btn:active {
+.oa-titlebar__btn:active {
   background: var(--oa-bg-active);
 }
-.oa-header__btn--danger:hover {
+.oa-titlebar__btn--danger:hover {
   color: var(--oa-text-error);
 }
 
@@ -802,109 +1040,6 @@
 }
 
 /* ==========================================================================
-   HISTORY —— 模仿文件浏览器列表
-   ========================================================================== */
-
-.oa-history {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--oa-s-4);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-/* 历史行 —— 模仿文件浏览器项 */
-.oa-history__row {
-  position: relative;
-  padding: var(--oa-s-8) var(--oa-s-12);
-  border-radius: var(--oa-r-s);
-  border: none;
-  cursor: pointer;
-}
-.oa-history__row:hover {
-  background: var(--oa-bg-hover);
-}
-.oa-history__row--active {
-  background: var(--oa-bg-active);
-}
-.oa-history__row--active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  background: var(--oa-text-accent);
-  border-radius: 0;
-}
-
-.oa-history__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--oa-s-4);
-}
-
-.oa-history__title-row {
-  display: flex;
-  align-items: center;
-  gap: var(--oa-s-8);
-}
-
-.oa-history__title {
-  flex: 1;
-  font-size: var(--oa-fs-sm);
-  font-weight: var(--oa-fw-normal);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--oa-text);
-}
-.oa-history__row--active .oa-history__title {
-  font-weight: var(--oa-fw-semibold);
-}
-
-.oa-history__count {
-  font-size: var(--oa-fs-xs);
-  background: transparent;
-  border: none;
-  color: var(--oa-text-faint);
-  font-weight: var(--oa-fw-normal);
-  flex-shrink: 0;
-}
-
-.oa-history__date {
-  font-size: var(--oa-fs-xs);
-  color: var(--oa-text-faint);
-}
-
-.oa-history__actions {
-  position: absolute;
-  right: var(--oa-s-4);
-  top: 50%;
-  transform: translateY(-50%);
-  display: none;
-  gap: 0;
-  background: var(--oa-bg);
-  border-radius: var(--oa-r-s);
-  padding: 2px;
-  border: 1px solid var(--oa-border);
-}
-.oa-history__row:hover .oa-history__actions {
-  display: flex;
-}
-
-.oa-history__rename {
-  width: 100%;
-  font-size: var(--oa-fs-sm);
-  padding: var(--oa-s-4) var(--oa-s-8);
-  border-radius: var(--oa-r-s);
-  border: 1px solid var(--oa-accent);
-  background: var(--oa-bg);
-  color: var(--oa-text);
-}
-
-/* ==========================================================================
    MODAL —— Obsidian 原生 Modal 内容
    ========================================================================== */
 
@@ -1095,6 +1230,50 @@
   border-radius: var(--oa-r-s);
   padding: var(--oa-s-8);
   color: var(--oa-text-muted);
+}
+
+/* ==========================================================================
+   STATUS BAR —— JetBrains 底部状态条
+   ========================================================================== */
+
+.oa-statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-12);
+  padding: 0 var(--oa-s-8);
+  height: 22px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--oa-border);
+  background: var(--oa-bg-alt);
+  font-size: var(--oa-fs-xs);
+  color: var(--oa-text-muted);
+  overflow: hidden;
+}
+
+.oa-statusbar__item {
+  display: flex;
+  align-items: center;
+  gap: var(--oa-s-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oa-statusbar__item svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.oa-statusbar__item--accent {
+  color: var(--oa-text-accent);
+}
+.oa-statusbar__item--right {
+  margin-left: auto;
+}
+.oa-statusbar__sep {
+  width: 1px;
+  height: 12px;
+  background: var(--oa-border);
+  flex-shrink: 0;
 }
 
 /* ==========================================================================

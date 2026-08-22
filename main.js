@@ -176,7 +176,7 @@ var DEFAULT_SETTINGS = {
   baseUrl: PROVIDER_PRESETS.dashscope.baseUrl,
   apiKey: "",
   model: PROVIDER_PRESETS.dashscope.model,
-  systemPrompt: "\u4F60\u662F NotePilot\uFF0C\u4E00\u4E2A\u96C6\u6210\u5728 Obsidian \u4E2D\u7684 AI \u7F16\u7A0B\u4E0E\u5199\u4F5C\u52A9\u624B\u3002\u8BF7\u7528\u4E2D\u6587\u56DE\u7B54\uFF0C\u56DE\u7B54\u7B80\u6D01\u3001\u51C6\u786E\uFF0C\u5FC5\u8981\u65F6\u4F7F\u7528 Markdown \u683C\u5F0F\u3002",
+  systemPrompt: "\u4F60\u662F ObsidianAI\uFF0C\u4E00\u4E2A\u96C6\u6210\u5728 Obsidian \u4E2D\u7684 AI \u7F16\u7A0B\u4E0E\u5199\u4F5C\u52A9\u624B\u3002\u8BF7\u7528\u4E2D\u6587\u56DE\u7B54\uFF0C\u56DE\u7B54\u7B80\u6D01\u3001\u51C6\u786E\uFF0C\u5FC5\u8981\u65F6\u4F7F\u7528 Markdown \u683C\u5F0F\u3002",
   temperature: 0.7,
   maxTokens: 2048,
   stream: true,
@@ -214,9 +214,9 @@ function sessionToMarkdown(session) {
     if (m.role === "user") {
       lines.push("**\u7528\u6237\uFF1A**", "", m.content, "");
     } else if (m.role === "assistant") {
-      lines.push("**NotePilot\uFF1A**", "", m.content, "");
+      lines.push("**ObsidianAI\uFF1A**", "", m.content, "");
     } else {
-      lines.push(`> \u26A0\uFE0F ${m.content}`, "");
+      lines.push(`> ${m.content}`, "");
     }
   }
   return lines.join("\n");
@@ -905,7 +905,8 @@ var VIEW_TYPE_NOTEPILOT = "notepilot-chat-view";
 var NotePilotView = class extends import_obsidian2.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
-    this.state = "chat";
+    this.sidebarOpen = false;
+    this.chatContentEl = null;
     this.popupEl = null;
     this.popupItems = [];
     this.popupIndex = 0;
@@ -920,10 +921,10 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     return VIEW_TYPE_NOTEPILOT;
   }
   getDisplayText() {
-    return "NotePilot";
+    return "ObsidianAI";
   }
   getIcon() {
-    return "bot";
+    return "sparkles";
   }
   async onOpen() {
     this.render();
@@ -937,31 +938,32 @@ var NotePilotView = class extends import_obsidian2.ItemView {
   render() {
     const root = this.containerEl.children[1];
     root.empty();
-    root.addClass("notepilot-view");
+    root.addClass("oa-view");
     if (!this.plugin.isLoggedIn()) {
       this.renderLogin(root);
       return;
     }
-    if (this.state === "history") {
-      this.renderHistory(root);
-    } else {
-      this.renderChat(root);
+    this.renderActivityBar(root);
+    const main = root.createDiv({ cls: "oa-main" });
+    if (this.sidebarOpen) {
+      this.renderSidebar(main);
     }
+    this.renderChat(main);
   }
   // ============ 登录页 ============
   renderLogin(root) {
-    const wrap = root.createDiv({ cls: "notepilot-login-wrap" });
-    const card = wrap.createDiv({ cls: "notepilot-login-card" });
-    const logo = card.createDiv({ cls: "notepilot-logo" });
-    (0, import_obsidian2.setIcon)(logo, "bot");
-    card.createEl("div", { cls: "notepilot-logo-text", text: "NotePilot" });
-    card.createEl("h2", { cls: "notepilot-login-title", text: "\u767B\u5F55 NotePilot" });
+    const wrap = root.createDiv({ cls: "oa-login" });
+    const card = wrap.createDiv({ cls: "oa-login__card" });
+    const logo = card.createDiv({ cls: "oa-login__logo" });
+    (0, import_obsidian2.setIcon)(logo, "sparkles");
+    card.createEl("div", { cls: "oa-login__brand", text: "ObsidianAI" });
+    card.createEl("h2", { cls: "oa-login__title", text: "\u767B\u5F55 ObsidianAI" });
     card.createEl("p", {
-      cls: "notepilot-login-desc",
+      cls: "oa-login__desc",
       text: "\u9009\u62E9\u670D\u52A1\u5546\u5E76\u8F93\u5165 API Key \u767B\u5F55\uFF0C\u5BC6\u94A5\u4EC5\u4FDD\u5B58\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
     });
     const providerSelect = card.createEl("select", {
-      cls: "notepilot-login-input"
+      cls: "oa-login__field"
     });
     for (const [p, preset] of Object.entries(PROVIDER_PRESETS)) {
       const opt = providerSelect.createEl("option", {
@@ -971,25 +973,26 @@ var NotePilotView = class extends import_obsidian2.ItemView {
       if (p === this.plugin.settings.provider) opt.selected = true;
     }
     const keyInput = card.createEl("input", {
-      cls: "notepilot-login-input",
+      cls: "oa-login__field",
       type: "password",
       attr: { placeholder: "\u8F93\u5165 API Key\uFF08sk-...\uFF09" }
     });
-    const adv = card.createDiv({ cls: "notepilot-login-adv" });
+    const adv = card.createDiv({ cls: "oa-login__advanced" });
     adv.createEl("label", { text: "Base URL" });
     const urlInput = adv.createEl("input", {
-      cls: "notepilot-login-input",
+      cls: "oa-login__field",
       type: "text",
       value: this.plugin.settings.baseUrl
     });
-    const statusEl = card.createDiv({ cls: "notepilot-login-status" });
+    const statusEl = card.createDiv({ cls: "oa-login__status" });
     const loginBtn = card.createEl("button", {
-      cls: "notepilot-login-btn",
-      text: "\u767B \u5F55"
+      cls: "oa-login__btn",
+      text: "\u767B \u5F55",
+      attr: { "aria-label": "\u767B\u5F55" }
     });
     const link = card.createEl("a", {
-      cls: "notepilot-login-link",
-      text: "\u83B7\u53D6 API Key \u2192"
+      cls: "oa-login__link",
+      text: "\u83B7\u53D6 API Key"
     });
     const keyPlaceholders = {
       ollama: "\u672C\u5730\u670D\u52A1\u65E0\u9700\u5BC6\u94A5\uFF0C\u53EF\u7559\u7A7A",
@@ -1013,7 +1016,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
       );
       if (preset.keyUrl) {
         link.style.display = "";
-        link.setText(`\u524D\u5F80 ${preset.label} \u83B7\u53D6 API Key \u2192`);
+        link.setText(`\u524D\u5F80 ${preset.label} \u83B7\u53D6 API Key`);
       } else {
         link.style.display = "none";
       }
@@ -1035,15 +1038,17 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         return;
       }
       loginBtn.disabled = true;
-      statusEl.setText("\u6B63\u5728\u9A8C\u8BC1\u51ED\u8BC1\u2026");
+      loginBtn.setAttribute("aria-busy", "true");
+      statusEl.setText("\u6B63\u5728\u9A8C\u8BC1\u51ED\u8BC1...");
       this.plugin.settings.provider = provider;
       this.plugin.settings.apiKey = key || (provider === "ollama" ? "ollama" : "custom");
       const url = urlInput.value.trim();
       if (url) this.plugin.settings.baseUrl = url;
       const result = await verifyApiKey(this.plugin.settings);
       loginBtn.disabled = false;
+      loginBtn.setAttribute("aria-busy", "false");
       if (result.ok) {
-        new import_obsidian2.Notice("NotePilot \u767B\u5F55\u6210\u529F");
+        new import_obsidian2.Notice("ObsidianAI \u767B\u5F55\u6210\u529F");
         await this.plugin.saveAll();
         const fetched = await fetchModels(this.plugin.settings);
         this.plugin.availableModels = fetched.ok ? fetched.models : null;
@@ -1060,58 +1065,92 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     });
     keyInput.focus();
   }
-  // ============ 历史会话列表（参照 Continue History 页） ============
-  renderHistory(root) {
-    const header = root.createDiv({ cls: "notepilot-header" });
-    const backBtn = header.createEl("button", {
-      cls: "notepilot-icon-btn",
-      attr: { title: "\u8FD4\u56DE\u804A\u5929" }
+  // ============ 活动栏（JetBrains 左侧图标条） ============
+  renderActivityBar(root) {
+    const bar = root.createDiv({ cls: "oa-actbar" });
+    const chatBtn = bar.createEl("button", {
+      cls: "oa-actbar__btn oa-actbar__btn--active",
+      attr: { title: "\u804A\u5929" }
     });
-    (0, import_obsidian2.setIcon)(backBtn, "arrow-left");
-    backBtn.addEventListener("click", () => {
-      this.state = "chat";
+    (0, import_obsidian2.setIcon)(chatBtn, "message-square");
+    const historyBtn = bar.createEl("button", {
+      cls: `oa-actbar__btn${this.sidebarOpen ? " oa-actbar__btn--active" : ""}`,
+      attr: { title: "\u5386\u53F2\u4F1A\u8BDD" }
+    });
+    (0, import_obsidian2.setIcon)(historyBtn, "clock");
+    historyBtn.addEventListener("click", () => {
+      this.sidebarOpen = !this.sidebarOpen;
       this.render();
     });
-    header.createDiv({ cls: "notepilot-header-title", text: "\u5386\u53F2\u4F1A\u8BDD" });
-    header.createDiv({ cls: "notepilot-toolbar-spacer" });
-    const newBtn = header.createEl("button", {
-      cls: "notepilot-icon-btn",
-      attr: { title: "\u65B0\u5BF9\u8BDD" }
+    const newBtn = bar.createEl("button", {
+      cls: "oa-actbar__btn",
+      attr: { title: "\u65B0\u5EFA\u5BF9\u8BDD" }
     });
-    (0, import_obsidian2.setIcon)(newBtn, "square-plus");
+    (0, import_obsidian2.setIcon)(newBtn, "plus-square");
     newBtn.addEventListener("click", () => {
       this.plugin.newSession();
-      this.state = "chat";
+      this.attachedFiles = [];
       this.render();
     });
-    const list = root.createDiv({ cls: "notepilot-history-list" });
+    bar.createDiv({ cls: "oa-actbar__spacer" });
+    const settingsBtn = bar.createEl("button", {
+      cls: "oa-actbar__btn",
+      attr: { title: "\u8BBE\u7F6E" }
+    });
+    (0, import_obsidian2.setIcon)(settingsBtn, "settings");
+    settingsBtn.addEventListener("click", () => {
+      var _a;
+      (_a = this.app.setting) == null ? void 0 : _a.open();
+    });
+    const logoutBtn = bar.createEl("button", {
+      cls: "oa-actbar__btn oa-actbar__btn--danger",
+      attr: { title: "\u9000\u51FA\u767B\u5F55" }
+    });
+    (0, import_obsidian2.setIcon)(logoutBtn, "log-out");
+    logoutBtn.addEventListener("click", () => this.logout());
+  }
+  // ============ 历史会话侧边栏（JetBrains 项目树风格） ============
+  renderSidebar(main) {
+    const sidebar = main.createDiv({ cls: "oa-sidebar" });
+    const header = sidebar.createDiv({ cls: "oa-sidebar__header" });
+    header.createDiv({ cls: "oa-sidebar__title", text: "\u4F1A\u8BDD" });
+    const closeBtn = header.createEl("button", {
+      cls: "oa-sidebar__action",
+      attr: { title: "\u5173\u95ED\u4FA7\u8FB9\u680F" }
+    });
+    (0, import_obsidian2.setIcon)(closeBtn, "x");
+    closeBtn.addEventListener("click", () => {
+      this.sidebarOpen = false;
+      this.render();
+    });
+    const list = sidebar.createDiv({ cls: "oa-sidebar__list" });
     const sessions = [...this.plugin.sessions].sort(
       (a, b) => b.updatedAt - a.updatedAt
     );
     if (sessions.length === 0) {
-      list.createDiv({ cls: "notepilot-chat-empty", text: "\u6682\u65E0\u4F1A\u8BDD" });
+      list.createDiv({ cls: "oa-empty", text: "\u6682\u65E0\u4F1A\u8BDD" });
       return;
     }
     for (const s of sessions) {
-      const row = list.createDiv({ cls: "notepilot-history-row" });
+      const row = list.createDiv({ cls: "oa-sidebar__row" });
       if (s.id === this.plugin.currentSessionId) {
-        row.addClass("notepilot-history-row-active");
+        row.addClass("oa-sidebar__row--active");
       }
-      const body = row.createDiv({ cls: "notepilot-history-body" });
-      const titleRow = body.createDiv({ cls: "notepilot-history-title-row" });
+      const body = row.createDiv({ cls: "oa-sidebar__body" });
+      const titleRow = body.createDiv({ cls: "oa-sidebar__title-row" });
       const titleEl = titleRow.createSpan({
-        cls: "notepilot-history-title",
+        cls: "oa-sidebar__name",
         text: s.title
       });
       const count = s.messages.filter((m) => m.role !== "error").length;
-      titleRow.createSpan({ cls: "notepilot-history-count", text: String(count) });
+      titleRow.createSpan({ cls: "oa-sidebar__count", text: String(count) });
       body.createDiv({
-        cls: "notepilot-history-date",
+        cls: "oa-sidebar__date",
         text: formatDate(s.updatedAt)
       });
-      const actions = row.createDiv({ cls: "notepilot-history-actions" });
+      const actions = row.createDiv({ cls: "oa-sidebar__actions" });
       const editBtn = actions.createEl("button", {
-        cls: "notepilot-icon-btn",
+        cls: "oa-sidebar__action",
         attr: { title: "\u91CD\u547D\u540D" }
       });
       (0, import_obsidian2.setIcon)(editBtn, "pencil");
@@ -1120,7 +1159,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         this.startRename(row, titleEl, s.id);
       });
       const exportBtn = actions.createEl("button", {
-        cls: "notepilot-icon-btn",
+        cls: "oa-sidebar__action",
         attr: { title: "\u5BFC\u51FA\u4E3A Markdown" }
       });
       (0, import_obsidian2.setIcon)(exportBtn, "download");
@@ -1129,7 +1168,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         await this.exportSession(s.id);
       });
       const delBtn = actions.createEl("button", {
-        cls: "notepilot-icon-btn notepilot-icon-btn-danger",
+        cls: "oa-sidebar__action oa-sidebar__action--danger",
         attr: { title: "\u5220\u9664" }
       });
       (0, import_obsidian2.setIcon)(delBtn, "trash-2");
@@ -1142,7 +1181,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
       });
       row.addEventListener("click", () => {
         this.plugin.switchSession(s.id);
-        this.state = "chat";
+        this.sidebarOpen = false;
         this.render();
       });
     }
@@ -1153,7 +1192,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     const input = document.createElement("input");
     input.type = "text";
     input.value = session.title;
-    input.addClass("notepilot-history-rename");
+    input.addClass("oa-sidebar__rename");
     titleEl.replaceWith(input);
     input.focus();
     input.select();
@@ -1173,79 +1212,74 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     const session = this.plugin.sessions.find((x) => x.id === id);
     if (!session) return;
     const safe = session.title.replace(/[\\/:*?"<>|#^\[\]]/g, "").slice(0, 40);
-    let path = `NotePilot ${safe}.md`;
+    let path = `ObsidianAI ${safe}.md`;
     let n = 1;
     while (this.app.vault.getAbstractFileByPath(path)) {
-      path = `NotePilot ${safe} ${n++}.md`;
+      path = `ObsidianAI ${safe} ${n++}.md`;
     }
     const file = await this.app.vault.create(path, sessionToMarkdown(session));
     new import_obsidian2.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
     const leaf = this.app.workspace.getLeaf(true);
     await leaf.openFile(file);
   }
-  // ============ 聊天页 ============
-  renderChat(root) {
-    const header = root.createDiv({ cls: "notepilot-header" });
-    const title = header.createDiv({ cls: "notepilot-header-title" });
-    (0, import_obsidian2.setIcon)(title, "bot");
-    title.createSpan({ text: "NotePilot" });
-    header.createDiv({ cls: "notepilot-toolbar-spacer" });
-    const historyBtn = header.createEl("button", {
-      cls: "notepilot-icon-btn",
-      attr: { title: "\u5386\u53F2\u4F1A\u8BDD" }
+  // ============ 聊天页（JetBrains 工具窗口风格） ============
+  renderChat(main) {
+    const content = main.createDiv({ cls: "oa-content" });
+    this.chatContentEl = content;
+    const titlebar = content.createDiv({ cls: "oa-titlebar" });
+    const title = titlebar.createDiv({ cls: "oa-titlebar__title" });
+    (0, import_obsidian2.setIcon)(title, "sparkles");
+    title.createSpan({ text: "ObsidianAI" });
+    titlebar.createDiv({ cls: "oa-titlebar__spacer" });
+    const agentBtn = titlebar.createEl("button", {
+      cls: "oa-mode-btn"
     });
-    (0, import_obsidian2.setIcon)(historyBtn, "history");
-    historyBtn.addEventListener("click", () => {
-      this.state = "history";
-      this.render();
+    (0, import_obsidian2.setIcon)(agentBtn, "bot");
+    agentBtn.createSpan({ text: " Agent" });
+    agentBtn.setAttribute("title", "Agent \u6A21\u5F0F\uFF1AAI \u53EF\u5EFA\u8BAE\u521B\u5EFA/\u4FEE\u6539\u5E93\u5185\u6587\u4EF6\uFF08\u9700\u4F60\u5BA1\u6279\uFF09");
+    const syncAgentBtn = () => agentBtn.toggleClass("oa-mode-btn--active", this.plugin.settings.agentMode);
+    syncAgentBtn();
+    agentBtn.addEventListener("click", () => {
+      var _a;
+      this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
+      void this.plugin.saveAll();
+      syncAgentBtn();
+      (_a = this.renderStatusBar) == null ? void 0 : _a.call(this, content);
+      new import_obsidian2.Notice(
+        this.plugin.settings.agentMode ? "Agent \u6A21\u5F0F\u5DF2\u5F00\u542F\uFF1AAI \u53EF\u63D0\u51FA\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE" : "Agent \u6A21\u5F0F\u5DF2\u5173\u95ED"
+      );
     });
-    const newBtn = header.createEl("button", {
-      cls: "notepilot-icon-btn",
-      attr: { title: "\u65B0\u5BF9\u8BDD" }
-    });
-    (0, import_obsidian2.setIcon)(newBtn, "square-plus");
-    newBtn.addEventListener("click", () => {
-      this.plugin.newSession();
-      this.attachedFiles = [];
-      this.render();
-    });
-    const logoutBtn = header.createEl("button", {
-      cls: "notepilot-icon-btn",
-      attr: { title: "\u9000\u51FA\u767B\u5F55" }
-    });
-    (0, import_obsidian2.setIcon)(logoutBtn, "log-out");
-    logoutBtn.addEventListener("click", () => this.logout());
-    this.messagesEl = root.createDiv({ cls: "notepilot-chat-messages" });
+    this.messagesEl = content.createDiv({ cls: "oa-chat__messages" });
     this.renderMessages();
     if (this.quotedText === null && this.plugin.pendingQuotedText) {
       this.quotedText = this.plugin.pendingQuotedText;
       this.plugin.pendingQuotedText = null;
     }
-    this.chipsEl = root.createDiv({ cls: "notepilot-chips" });
+    this.chipsEl = content.createDiv({ cls: "oa-chips" });
     this.renderChips();
-    const inputBox = root.createDiv({ cls: "notepilot-input-box" });
+    const inputBox = content.createDiv({ cls: "oa-input__box" });
     this.inputEl = inputBox.createEl("textarea", {
-      cls: "notepilot-chat-input",
+      cls: "oa-input__textarea",
       attr: {
-        placeholder: "\u63D0\u95EE\u2026\uFF08@ \u5F15\u7528\u7B14\u8BB0\uFF0C\u62D6\u5165\u6587\u4EF6\u9644\u52A0\uFF0CEnter \u53D1\u9001\uFF09",
+        placeholder: "\u63D0\u95EE...\uFF08@ \u5F15\u7528\u7B14\u8BB0\uFF0C\u62D6\u5165\u6587\u4EF6\u9644\u52A0\uFF0CEnter \u53D1\u9001\uFF09",
         rows: "2"
       }
     });
     this.registerDomEvent(inputBox, "dragover", (evt) => {
       evt.preventDefault();
       if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
-      inputBox.addClass("notepilot-dragover");
+      inputBox.addClass("oa-input__box--dragover");
     });
     this.registerDomEvent(inputBox, "dragleave", () => {
-      inputBox.removeClass("notepilot-dragover");
+      inputBox.removeClass("oa-input__box--dragover");
     });
     this.registerDomEvent(inputBox, "drop", (evt) => {
-      inputBox.removeClass("notepilot-dragover");
+      inputBox.removeClass("oa-input__box--dragover");
       void this.onDropFiles(evt);
     });
-    const toolbar = inputBox.createDiv({ cls: "notepilot-input-toolbar" });
+    const toolbar = inputBox.createDiv({ cls: "oa-input__toolbar" });
     const modelSelect = toolbar.createEl("select", {
-      cls: "notepilot-model-select"
+      cls: "oa-input__model"
     });
     const presetModels = PROVIDER_MODELS[this.plugin.settings.provider];
     const fetched = this.plugin.availableModels;
@@ -1266,7 +1300,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
       this.plugin.updateStatusBar();
     });
     const refreshModelsBtn = toolbar.createEl("button", {
-      cls: "notepilot-icon-btn",
+      cls: "oa-titlebar__btn",
       attr: { title: "\u4ECE API \u62C9\u53D6\u53EF\u7528\u6A21\u578B\u5217\u8868" }
     });
     (0, import_obsidian2.setIcon)(refreshModelsBtn, "refresh-cw");
@@ -1275,40 +1309,50 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     });
     if (this.plugin.settings.includeActiveNote) {
       const badge = toolbar.createDiv({
-        cls: "notepilot-ctx-badge",
-        text: "\u{1F4C4} \u5F53\u524D\u7B14\u8BB0"
+        cls: "oa-input__badge"
       });
+      (0, import_obsidian2.setIcon)(badge, "file-text");
+      badge.createSpan({ text: " \u5F53\u524D\u7B14\u8BB0" });
       badge.setAttribute("title", "\u63D0\u95EE\u65F6\u5C06\u9644\u5E26\u5F53\u524D\u7B14\u8BB0\u5185\u5BB9");
     }
-    const agentBtn = toolbar.createEl("button", {
-      cls: "notepilot-mode-btn",
-      text: "\u26A1 Agent"
-    });
-    agentBtn.setAttribute("title", "Agent \u6A21\u5F0F\uFF1AAI \u53EF\u5EFA\u8BAE\u521B\u5EFA/\u4FEE\u6539\u5E93\u5185\u6587\u4EF6\uFF08\u9700\u4F60\u5BA1\u6279\uFF09");
-    const syncAgentBtn = () => agentBtn.toggleClass("notepilot-mode-on", this.plugin.settings.agentMode);
-    syncAgentBtn();
-    agentBtn.addEventListener("click", () => {
-      this.plugin.settings.agentMode = !this.plugin.settings.agentMode;
-      void this.plugin.saveAll();
-      syncAgentBtn();
-      new import_obsidian2.Notice(
-        this.plugin.settings.agentMode ? "Agent \u6A21\u5F0F\u5DF2\u5F00\u542F\uFF1AAI \u53EF\u63D0\u51FA\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE" : "Agent \u6A21\u5F0F\u5DF2\u5173\u95ED"
-      );
-    });
-    toolbar.createDiv({ cls: "notepilot-toolbar-spacer" });
+    toolbar.createDiv({ cls: "oa-input__toolbar-spacer" });
     this.stopBtn = toolbar.createEl("button", {
-      cls: "notepilot-chat-stop",
-      text: "\u505C\u6B62"
+      cls: "oa-input__stop",
+      attr: { "aria-label": "\u505C\u6B62\u751F\u6210" }
     });
+    (0, import_obsidian2.setIcon)(this.stopBtn, "square");
     this.stopBtn.style.display = "none";
     this.stopBtn.addEventListener("click", () => this.stop());
-    this.sendBtn = toolbar.createEl("button", { cls: "notepilot-chat-send" });
+    this.sendBtn = toolbar.createEl("button", { cls: "oa-input__send" });
     (0, import_obsidian2.setIcon)(this.sendBtn, "arrow-up");
-    this.sendBtn.setAttribute("aria-label", "\u53D1\u9001");
+    this.sendBtn.setAttribute("aria-label", "\u53D1\u9001\u6D88\u606F");
     this.sendBtn.addEventListener("click", () => void this.send());
     this.inputEl.addEventListener("keydown", (e) => this.onInputKeydown(e));
     this.inputEl.addEventListener("input", () => this.onInput());
+    this.renderStatusBar(content);
     if (this.generating) this.setBusy(true);
+  }
+  // ============ 状态栏 ============
+  renderStatusBar(content) {
+    content.querySelectorAll(".oa-statusbar").forEach((el) => el.remove());
+    const bar = content.createDiv({ cls: "oa-statusbar" });
+    const modelItem = bar.createSpan({ cls: "oa-statusbar__item" });
+    (0, import_obsidian2.setIcon)(modelItem, "cpu");
+    modelItem.createSpan({ text: this.plugin.settings.model });
+    bar.createSpan({ cls: "oa-statusbar__sep" });
+    if (this.plugin.settings.agentMode) {
+      const agentItem = bar.createSpan({ cls: "oa-statusbar__item oa-statusbar__item--accent" });
+      (0, import_obsidian2.setIcon)(agentItem, "bot");
+      agentItem.createSpan({ text: "Agent" });
+      bar.createSpan({ cls: "oa-statusbar__sep" });
+    }
+    if (this.plugin.settings.includeActiveNote) {
+      const noteItem = bar.createSpan({ cls: "oa-statusbar__item" });
+      (0, import_obsidian2.setIcon)(noteItem, "file-text");
+      noteItem.createSpan({ text: "\u7B14\u8BB0\u4E0A\u4E0B\u6587" });
+    }
+    const providerLabel = PROVIDER_PRESETS[this.plugin.settings.provider].label;
+    bar.createSpan({ cls: "oa-statusbar__item oa-statusbar__item--right", text: providerLabel });
   }
   renderMessages() {
     this.messagesEl.empty();
@@ -1323,23 +1367,25 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     this.scrollToBottom();
   }
   renderWelcome() {
-    const w = this.messagesEl.createDiv({ cls: "notepilot-welcome" });
-    w.createDiv({ cls: "notepilot-welcome-hi", text: "\u4F60\u597D \u{1F44B}" });
+    const w = this.messagesEl.createDiv({ cls: "oa-welcome" });
+    const icon = w.createDiv({ cls: "oa-welcome__icon" });
+    (0, import_obsidian2.setIcon)(icon, "sparkles");
+    w.createDiv({ cls: "oa-welcome__title", text: "\u4F60\u597D" });
     w.createDiv({
-      cls: "notepilot-welcome-sub",
-      text: "\u6211\u662F NotePilot\uFF0C\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002\u8F93\u5165 @ \u53EF\u5F15\u7528\u5E93\u5185\u7B14\u8BB0\u3002"
+      cls: "oa-welcome__sub",
+      text: "\u6211\u662F ObsidianAI\uFF0C\u53EF\u4EE5\u5E2E\u4F60\u603B\u7ED3\u3001\u6DA6\u8272\u3001\u6539\u5199\u7B14\u8BB0\u4E0E\u95EE\u7B54\u3002\u8F93\u5165 @ \u53EF\u5F15\u7528\u5E93\u5185\u7B14\u8BB0\u3002"
     });
-    const grid = w.createDiv({ cls: "notepilot-suggestions" });
+    const grid = w.createDiv({ cls: "oa-welcome__grid" });
     for (const s of SUGGESTIONS) {
       const btn = grid.createEl("button", {
-        cls: "notepilot-suggestion-btn",
+        cls: "oa-welcome__card",
         text: s.title
       });
       btn.addEventListener("click", () => void this.sendText(s.prompt));
     }
   }
   appendMessageEl(msg) {
-    const cls = msg.role === "user" ? "notepilot-msg notepilot-msg-user" : msg.role === "error" ? "notepilot-msg notepilot-msg-system-err" : "notepilot-msg notepilot-msg-assistant";
+    const cls = msg.role === "user" ? "oa-msg oa-msg--user" : msg.role === "error" ? "oa-msg oa-msg--error" : "oa-msg oa-msg--assistant";
     const el = this.messagesEl.createDiv({ cls });
     if (msg.role === "user" || msg.role === "error") {
       el.setText(msg.content);
@@ -1354,16 +1400,16 @@ var NotePilotView = class extends import_obsidian2.ItemView {
   /** 为代码块添加 复制 / 插入笔记 按钮（参照 Continue 代码块操作） */
   addCodeActions(el) {
     el.querySelectorAll("pre").forEach((pre) => {
-      if (pre.querySelector(".notepilot-code-actions")) return;
+      if (pre.querySelector(".oa-code-actions")) return;
       const bar = document.createElement("div");
-      bar.addClass("notepilot-code-actions");
-      const copyBtn = bar.createEl("button", { text: "\u590D\u5236" });
+      bar.addClass("oa-code-actions");
+      const copyBtn = bar.createEl("button", { cls: "oa-code-actions__btn", text: "\u590D\u5236" });
       copyBtn.addEventListener("click", () => {
         var _a;
         const code = pre.querySelector("code");
         void navigator.clipboard.writeText((_a = code == null ? void 0 : code.innerText) != null ? _a : "").then(() => new import_obsidian2.Notice("\u5DF2\u590D\u5236\u4EE3\u7801"));
       });
-      const insertBtn = bar.createEl("button", { text: "\u63D2\u5165\u7B14\u8BB0" });
+      const insertBtn = bar.createEl("button", { cls: "oa-code-actions__btn", text: "\u63D2\u5165\u7B14\u8BB0" });
       insertBtn.addEventListener("click", () => {
         var _a;
         const code = pre.querySelector("code");
@@ -1405,38 +1451,39 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     if (parsed.length > 0) {
       this.stripRenderedEditBlocks(container, parsed);
     }
-    if (parsed.length === 0 || container.querySelector(".notepilot-edit-cards")) {
+    if (parsed.length === 0 || container.querySelector(".oa-edit-cards")) {
       return;
     }
-    const wrap = container.createDiv({ cls: "notepilot-edit-cards" });
-    wrap.createDiv({
-      cls: "notepilot-edit-cards-title",
-      text: `\u{1F4DD} \u68C0\u6D4B\u5230 ${parsed.length} \u9879\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE\uFF0C\u786E\u8BA4\u540E\u751F\u6548`
+    const wrap = container.createDiv({ cls: "oa-edit-cards" });
+    const titleEl = wrap.createDiv({
+      cls: "oa-edit-cards__title"
     });
+    (0, import_obsidian2.setIcon)(titleEl, "pencil");
+    titleEl.createSpan({ text: ` \u68C0\u6D4B\u5230 ${parsed.length} \u9879\u6587\u4EF6\u4FEE\u6539\u5EFA\u8BAE\uFF0C\u786E\u8BA4\u540E\u751F\u6548` });
     for (const p of parsed) {
-      const card = wrap.createDiv({ cls: "notepilot-edit-card" });
+      const card = wrap.createDiv({ cls: "oa-edit-card" });
       if (!p.edit) {
         card.createDiv({
-          cls: "notepilot-edit-path",
-          text: `\u26A0\uFE0F \u7F16\u8F91\u5757\u89E3\u6790\u5931\u8D25\uFF1A${(_a = p.error) != null ? _a : "\u672A\u77E5\u9519\u8BEF"}`
+          cls: "oa-edit-card__path",
+          text: `\u7F16\u8F91\u5757\u89E3\u6790\u5931\u8D25\uFF1A${(_a = p.error) != null ? _a : "\u672A\u77E5\u9519\u8BEF"}`
         });
-        card.createEl("pre", { cls: "notepilot-edit-raw", text: p.raw });
+        card.createEl("pre", { cls: "oa-edit-card__raw", text: p.raw });
         continue;
       }
       const edit = p.edit;
-      const head = card.createDiv({ cls: "notepilot-edit-head" });
+      const head = card.createDiv({ cls: "oa-edit-card__head" });
       head.createSpan({
-        cls: `notepilot-edit-action notepilot-edit-action-${edit.action}`,
+        cls: `oa-edit-card__action oa-edit-card__action--${edit.action}`,
         text: edit.action === "replace" ? "\u66FF\u6362" : edit.action === "create" ? "\u65B0\u5EFA" : "\u8986\u5199"
       });
-      head.createSpan({ cls: "notepilot-edit-path", text: edit.path });
-      const diffEl = card.createDiv({ cls: "notepilot-edit-diff" });
+      head.createSpan({ cls: "oa-edit-card__path", text: edit.path });
+      const diffEl = card.createDiv({ cls: "oa-edit-card__diff" });
       const addDiffLine = (type, lineText) => {
         const row = diffEl.createDiv({
-          cls: `notepilot-diff-line notepilot-diff-${type}`
+          cls: `oa-diff__line oa-diff__line--${type}`
         });
         row.createSpan({
-          cls: "notepilot-diff-mark",
+          cls: "oa-diff__mark",
           text: type === "add" ? "+" : type === "del" ? "\u2212" : " "
         });
         row.createSpan({ text: lineText || " " });
@@ -1450,14 +1497,17 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         for (const l of allLines.slice(0, 12)) addDiffLine("add", l);
         if (allLines.length > 12) {
           diffEl.createDiv({
-            cls: "notepilot-diff-line",
-            text: `\u2026\uFF08\u5171 ${allLines.length} \u884C\uFF09`
+            cls: "oa-diff__line",
+            text: `...\uFF08\u5171 ${allLines.length} \u884C\uFF09`
           });
         }
       }
-      const btnRow = card.createDiv({ cls: "notepilot-edit-btns" });
-      const status = btnRow.createSpan({ cls: "notepilot-edit-status" });
-      const reject = btnRow.createEl("button", { text: "\u62D2\u7EDD" });
+      const btnRow = card.createDiv({ cls: "oa-edit-card__btns" });
+      const status = btnRow.createSpan({ cls: "oa-edit-card__status" });
+      const reject = btnRow.createEl("button", {
+        text: "\u62D2\u7EDD",
+        cls: "oa-btn--secondary"
+      });
       const apply = btnRow.createEl("button", {
         text: "\u5E94\u7528",
         cls: "mod-cta"
@@ -1472,11 +1522,11 @@ var NotePilotView = class extends import_obsidian2.ItemView {
           apply.disabled = true;
           try {
             const msg = await applyEdit(this.app, edit);
-            status.setText(`\u2705 ${msg}`);
+            status.setText(msg);
             reject.disabled = true;
             new import_obsidian2.Notice(msg);
           } catch (e) {
-            status.setText(`\u274C ${e.message}`);
+            status.setText(`\u9519\u8BEF: ${e.message}`);
             apply.disabled = false;
           }
         })();
@@ -1490,6 +1540,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     this.generating = busy;
     this.sendBtn.disabled = busy;
     this.sendBtn.style.display = busy ? "none" : "";
+    this.sendBtn.setAttribute("aria-busy", String(busy));
     this.stopBtn.style.display = busy ? "" : "none";
     this.inputEl.disabled = busy;
   }
@@ -1561,28 +1612,29 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     }
   }
   showAtPopup(query) {
+    var _a;
     const files = this.app.vault.getMarkdownFiles().filter((f) => !f.path.startsWith(".obsidian/")).filter(
       (f) => query ? (f.basename + f.path).toLowerCase().includes(query.toLowerCase()) : true
     ).slice(0, 20);
     this.popupItems = files;
     this.popupIndex = 0;
     if (!this.popupEl) {
-      const root = this.containerEl.children[1];
-      this.popupEl = root.createDiv({ cls: "notepilot-at-popup" });
+      const target = (_a = this.chatContentEl) != null ? _a : this.containerEl.children[1];
+      this.popupEl = target.createDiv({ cls: "oa-popup" });
     }
     this.popupEl.empty();
     if (files.length === 0) {
       this.popupEl.createDiv({
-        cls: "notepilot-at-item notepilot-at-empty",
+        cls: "oa-popup__item oa-popup__empty",
         text: "\u6CA1\u6709\u5339\u914D\u7684\u7B14\u8BB0"
       });
       return;
     }
     files.forEach((f, idx) => {
-      const item = this.popupEl.createDiv({ cls: "notepilot-at-item" });
-      item.createSpan({ cls: "notepilot-at-name", text: f.basename });
-      item.createSpan({ cls: "notepilot-at-path", text: f.path });
-      if (idx === this.popupIndex) item.addClass("notepilot-at-active");
+      const item = this.popupEl.createDiv({ cls: "oa-popup__item" });
+      item.createSpan({ cls: "oa-popup__name", text: f.basename });
+      item.createSpan({ cls: "oa-popup__path", text: f.path });
+      if (idx === this.popupIndex) item.addClass("oa-popup__item--active");
       item.addEventListener("mousedown", (e) => {
         e.preventDefault();
         this.selectAtFile(f);
@@ -1591,8 +1643,8 @@ var NotePilotView = class extends import_obsidian2.ItemView {
   }
   highlightPopup() {
     if (!this.popupEl) return;
-    this.popupEl.querySelectorAll(".notepilot-at-item").forEach((el, idx) => {
-      el.toggleClass("notepilot-at-active", idx === this.popupIndex);
+    this.popupEl.querySelectorAll(".oa-popup__item").forEach((el, idx) => {
+      el.toggleClass("oa-popup__item--active", idx === this.popupIndex);
     });
   }
   hideAtPopup() {
@@ -1631,29 +1683,32 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     this.chipsEl.style.display = "";
     if (this.quotedText !== null) {
       const q = this.quotedText;
-      const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
-      chip.createSpan({ text: `\u{1F4CB} \u5212\u8BCD\u9009\u4E2D\uFF08${q.length} \u5B57\uFF09` });
+      const chip = this.chipsEl.createDiv({ cls: "oa-chip" });
+      (0, import_obsidian2.setIcon)(chip, "quote");
+      chip.createSpan({ text: ` \u5212\u8BCD\u9009\u4E2D\uFF08${q.length} \u5B57\uFF09` });
       chip.setAttribute("title", q.slice(0, 200));
-      const x = chip.createSpan({ cls: "notepilot-chip-x", text: "\xD7" });
+      const x = chip.createSpan({ cls: "oa-chip__remove", text: "\xD7" });
       x.addEventListener("click", () => {
         this.quotedText = null;
         this.renderChips();
       });
     }
     for (const ef of this.externalFiles) {
-      const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
-      chip.createSpan({ text: `\u{1F4CE} ${ef.name}` });
-      const x = chip.createSpan({ cls: "notepilot-chip-x", text: "\xD7" });
+      const chip = this.chipsEl.createDiv({ cls: "oa-chip" });
+      (0, import_obsidian2.setIcon)(chip, "paperclip");
+      chip.createSpan({ text: ` ${ef.name}` });
+      const x = chip.createSpan({ cls: "oa-chip__remove", text: "\xD7" });
       x.addEventListener("click", () => {
         this.externalFiles = this.externalFiles.filter((f) => f !== ef);
         this.renderChips();
       });
     }
     for (const path of this.attachedFiles) {
-      const chip = this.chipsEl.createDiv({ cls: "notepilot-chip" });
+      const chip = this.chipsEl.createDiv({ cls: "oa-chip" });
       const name = (_b = (_a = path.split("/").pop()) == null ? void 0 : _a.replace(/\.md$/, "")) != null ? _b : path;
-      chip.createSpan({ text: `\u{1F4C4} ${name}` });
-      const x = chip.createSpan({ cls: "notepilot-chip-x", text: "\xD7" });
+      (0, import_obsidian2.setIcon)(chip, "file-text");
+      chip.createSpan({ text: ` ${name}` });
+      const x = chip.createSpan({ cls: "oa-chip__remove", text: "\xD7" });
       x.addEventListener("click", () => {
         this.attachedFiles = this.attachedFiles.filter((p) => p !== path);
         this.renderChips();
@@ -1819,7 +1874,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
     this.renderMessages();
     const assistantEl = this.messagesEl.lastElementChild;
     assistantEl.empty();
-    assistantEl.createSpan({ cls: "notepilot-thinking", text: "\u601D\u8003\u4E2D\u2026" });
+    assistantEl.createSpan({ cls: "oa-msg--thinking", text: "\u601D\u8003\u4E2D..." });
     this.setBusy(true);
     const requestMessages = await this.buildRequestMessages(
       attached,
@@ -1847,7 +1902,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         onError: (message) => {
           assistantMsg.role = "error";
           assistantMsg.content = message;
-          assistantEl.className = "notepilot-msg notepilot-msg-system-err";
+          assistantEl.className = "oa-msg oa-msg--error";
           assistantEl.setText(message);
           new import_obsidian2.Notice(message);
         }
@@ -1857,7 +1912,7 @@ var NotePilotView = class extends import_obsidian2.ItemView {
         this.setBusy(false);
         if (!assistantMsg.content) {
           assistantEl.empty();
-          assistantEl.setText("(\u65E0\u5185\u5BB9)");
+          assistantEl.setText("\uFF08\u65E0\u5185\u5BB9\uFF09");
         } else {
           this.addCodeActions(assistantEl);
           this.renderEditCards(assistantEl, assistantMsg.content);
@@ -2030,17 +2085,17 @@ var NotePilotPlugin = class extends import_obsidian3.Plugin {
     );
     this.statusBarEl = this.addStatusBarItem();
     this.updateStatusBar();
-    this.addRibbonIcon("bot", "\u6253\u5F00 NotePilot", () => {
+    this.addRibbonIcon("sparkles", "\u6253\u5F00 ObsidianAI", () => {
       void this.activateView();
     });
     this.addCommand({
       id: "open-notepilot",
-      name: "\u6253\u5F00 NotePilot \u9762\u677F",
+      name: "\u6253\u5F00 ObsidianAI \u9762\u677F",
       callback: () => void this.activateView()
     });
     this.addCommand({
       id: "new-notepilot-chat",
-      name: "\u65B0\u5EFA NotePilot \u5BF9\u8BDD",
+      name: "\u65B0\u5EFA ObsidianAI \u5BF9\u8BDD",
       callback: () => {
         this.newSession();
         this.refreshView();
@@ -2068,19 +2123,19 @@ var NotePilotPlugin = class extends import_obsidian3.Plugin {
         const sel = editor.getSelection();
         if (!sel.trim()) return;
         menu.addItem((item) => {
-          item.setTitle("NotePilot\uFF1A\u5212\u8BCD\u63D0\u95EE").setIcon("quote").onClick(() => void this.askSelection(sel));
+          item.setTitle("ObsidianAI\uFF1A\u5212\u8BCD\u63D0\u95EE").setIcon("quote").onClick(() => void this.askSelection(sel));
         });
       })
     );
     this.addCommand({
       id: "logout-notepilot-chat",
-      name: "\u9000\u51FA NotePilot \u767B\u5F55",
+      name: "\u9000\u51FA ObsidianAI \u767B\u5F55",
       callback: () => {
         this.settings.apiKey = "";
         void this.saveAll();
         this.updateStatusBar();
         this.refreshView();
-        new import_obsidian3.Notice("\u5DF2\u9000\u51FA NotePilot \u767B\u5F55");
+        new import_obsidian3.Notice("\u5DF2\u9000\u51FA ObsidianAI \u767B\u5F55");
       }
     });
     this.addSettingTab(new NotePilotSettingTab(this.app, this));
@@ -2090,10 +2145,10 @@ var NotePilotPlugin = class extends import_obsidian3.Plugin {
     if (!this.statusBarEl) return;
     if (this.isLoggedIn()) {
       this.statusBarEl.setText(
-        `NotePilot \xB7 \u5DF2\u767B\u5F55 \xB7 ${this.settings.model}`
+        `ObsidianAI \xB7 \u5DF2\u767B\u5F55 \xB7 ${this.settings.model}`
       );
     } else {
-      this.statusBarEl.setText("NotePilot \xB7 \u672A\u767B\u5F55");
+      this.statusBarEl.setText("ObsidianAI \xB7 \u672A\u767B\u5F55");
     }
   }
   onunload() {
@@ -2177,7 +2232,7 @@ var NotePilotPlugin = class extends import_obsidian3.Plugin {
   /** Inline Chat：选中文本 → 指令 → AI 改写 → Diff 预览 → 应用 */
   async inlineChat(editor, view) {
     if (!this.isLoggedIn()) {
-      new import_obsidian3.Notice("\u8BF7\u5148\u767B\u5F55 NotePilot");
+      new import_obsidian3.Notice("\u8BF7\u5148\u767B\u5F55 ObsidianAI");
       return;
     }
     const sel = editor.getSelection();
@@ -2187,7 +2242,7 @@ var NotePilotPlugin = class extends import_obsidian3.Plugin {
     }
     const instruction = await new InstructionModal(this.app).openAndWait();
     if (instruction === null) return;
-    new import_obsidian3.Notice("NotePilot \u6B63\u5728\u6539\u5199\u2026");
+    new import_obsidian3.Notice("ObsidianAI \u6B63\u5728\u6539\u5199...");
     let result;
     try {
       result = await this.complete([
@@ -2240,17 +2295,20 @@ var InstructionModal = class extends import_obsidian3.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass("notepilot-modal");
-    contentEl.createEl("h3", { text: "Inline Chat\uFF1A\u5982\u4F55\u6539\u5199\u9009\u4E2D\u6587\u672C\uFF1F" });
+    contentEl.addClass("oa-modal");
+    contentEl.createEl("h3", { cls: "oa-modal__title", text: "Inline Chat\uFF1A\u5982\u4F55\u6539\u5199\u9009\u4E2D\u6587\u672C\uFF1F" });
     const input = contentEl.createEl("textarea", {
-      cls: "notepilot-modal-input",
+      cls: "oa-modal__body",
       attr: {
-        placeholder: "\u4F8B\u5982\uFF1A\u6DA6\u8272\u8BED\u8A00 / \u7FFB\u8BD1\u6210\u82F1\u6587 / \u7CBE\u7B80\u4E3A 3 \u53E5\u8BDD\u2026",
+        placeholder: "\u4F8B\u5982\uFF1A\u6DA6\u8272\u8BED\u8A00 / \u7FFB\u8BD1\u6210\u82F1\u6587 / \u7CBE\u7B80\u4E3A 3 \u53E5\u8BDD...",
         rows: "3"
       }
     });
-    const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
-    const cancel = row.createEl("button", { text: "\u53D6\u6D88" });
+    const row = contentEl.createDiv({ cls: "oa-modal__actions" });
+    const cancel = row.createEl("button", {
+      text: "\u53D6\u6D88",
+      cls: "oa-btn--secondary"
+    });
     const ok = row.createEl("button", {
       text: "\u6539\u5199",
       cls: "mod-cta"
@@ -2299,17 +2357,20 @@ var DiffModal = class extends import_obsidian3.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass("notepilot-modal");
-    contentEl.createEl("h3", { text: "\u6539\u52A8\u9884\u89C8\uFF08Diff\uFF09" });
-    const diffEl = contentEl.createDiv({ cls: "notepilot-diff" });
+    contentEl.addClass("oa-modal");
+    contentEl.createEl("h3", { cls: "oa-modal__title", text: "\u6539\u52A8\u9884\u89C8\uFF08Diff\uFF09" });
+    const diffEl = contentEl.createDiv({ cls: "oa-diff" });
     for (const line of lineDiff(this.oldText, this.newText)) {
-      const row2 = diffEl.createDiv({ cls: `notepilot-diff-line notepilot-diff-${line.type}` });
+      const row2 = diffEl.createDiv({ cls: `oa-diff__line oa-diff__line--${line.type}` });
       const mark = line.type === "add" ? "+" : line.type === "del" ? "\u2212" : " ";
-      row2.createSpan({ cls: "notepilot-diff-mark", text: mark });
+      row2.createSpan({ cls: "oa-diff__mark", text: mark });
       row2.createSpan({ text: line.text || " " });
     }
-    const row = contentEl.createDiv({ cls: "notepilot-modal-row" });
-    const reject = row.createEl("button", { text: "\u62D2\u7EDD" });
+    const row = contentEl.createDiv({ cls: "oa-modal__actions" });
+    const reject = row.createEl("button", {
+      text: "\u62D2\u7EDD",
+      cls: "oa-btn--secondary"
+    });
     const accept = row.createEl("button", {
       text: "\u63A5\u53D7\u6539\u52A8",
       cls: "mod-cta"
@@ -2338,7 +2399,7 @@ var NotePilotSettingTab = class extends import_obsidian3.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "NotePilot \u8BBE\u7F6E" });
+    containerEl.createEl("h2", { text: "ObsidianAI \u8BBE\u7F6E" });
     new import_obsidian3.Setting(containerEl).setName("\u767B\u5F55\u72B6\u6001").setDesc(
       this.plugin.isLoggedIn() ? `\u5DF2\u767B\u5F55\uFF08\u6A21\u578B\uFF1A${this.plugin.settings.model}\uFF09` : "\u672A\u767B\u5F55\uFF0C\u8BF7\u5728\u804A\u5929\u9762\u677F\u767B\u5F55\u9875\u8F93\u5165\u51ED\u8BC1"
     );
@@ -2427,8 +2488,8 @@ var NotePilotSettingTab = class extends import_obsidian3.PluginSettingTab {
       })
     );
     containerEl.createEl("p", {
-      cls: "notepilot-settings-notice",
-      text: "\u8BF4\u660E\uFF1A\u672C\u63D2\u4EF6\u4E3A\u4EFF NotePilot \u7684\u72EC\u7ACB\u5B9E\u73B0\uFF0C\u754C\u9762\u4E0E\u4EA4\u4E92\u53C2\u7167\u5F00\u6E90\u9879\u76EE Continue\uFF08Apache 2.0\uFF09\u3002BYOK \u6A21\u5F0F\u9700\u8981\u4F60\u81EA\u5DF1\u63D0\u4F9B\u5927\u6A21\u578B API\uFF0C\u5BC6\u94A5\u4EC5\u5B58\u50A8\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
+      cls: "oa-settings__notice",
+      text: "\u8BF4\u660E\uFF1A\u672C\u63D2\u4EF6\u4E3A ObsidianAI \u7684\u72EC\u7ACB\u5B9E\u73B0\uFF0C\u754C\u9762\u4E0E\u4EA4\u4E92\u53C2\u7167\u5F00\u6E90\u9879\u76EE Continue\uFF08Apache 2.0\uFF09\u3002BYOK \u6A21\u5F0F\u9700\u8981\u4F60\u81EA\u5DF1\u63D0\u4F9B\u5927\u6A21\u578B API\uFF0C\u5BC6\u94A5\u4EC5\u5B58\u50A8\u5728\u672C\u673A Obsidian \u914D\u7F6E\u4E2D\u3002"
     });
   }
   hide() {

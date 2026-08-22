@@ -1,9 +1,9 @@
 {
 	"id": "obsidian-notepilot",
 	"name": "NotePilot",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"minAppVersion": "1.5.0",
-	"description": "NotePilot：Obsidian 侧边栏 AI 聊天助手，支持流式输出、多会话、@上下文、划词提问、拖拽附加文件、Inline Chat、Rules、Agent 文件修改（Diff 审批）；12 个服务商三协议：OpenAI 兼容（DashScope/OpenAI/DeepSeek/Kimi/GLM/SiliconFlow/Ollama/OpenRouter/Groq/自定义）+ Anthropic 原生 + Gemini 原生。",
+	"description": "NotePilot：JetBrains 风格 IDE 界面的 Obsidian AI 聊天助手，活动栏+侧边栏+状态栏布局，支持流式输出、多会话、@上下文、划词提问、拖拽附加文件、Inline Chat、Rules、Agent 文件修改（Diff 审批）；12 个服务商三协议。",
 	"author": "local",
 	"isDesktopOnly": false
 }
