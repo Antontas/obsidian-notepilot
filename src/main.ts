@@ -383,7 +383,10 @@ class InstructionModal extends Modal {
 			},
 		});
 		const row = contentEl.createDiv({ cls: "oa-modal__actions" });
-		const cancel = row.createEl("button", { text: "取消" });
+		const cancel = row.createEl("button", {
+			text: "取消",
+			cls: "oa-btn--secondary",
+		});
 		const ok = row.createEl("button", {
 			text: "改写",
 			cls: "mod-cta",
@@ -452,7 +455,10 @@ class DiffModal extends Modal {
 		}
 
 		const row = contentEl.createDiv({ cls: "oa-modal__actions" });
-		const reject = row.createEl("button", { text: "拒绝" });
+		const reject = row.createEl("button", {
+			text: "拒绝",
+			cls: "oa-btn--secondary",
+		});
 		const accept = row.createEl("button", {
 			text: "接受改动",
 			cls: "mod-cta",

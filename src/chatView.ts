@@ -537,6 +537,8 @@ export class NotePilotView extends ItemView {
 
 	private renderWelcome(): void {
 		const w = this.messagesEl.createDiv({ cls: "oa-welcome" });
+		const icon = w.createDiv({ cls: "oa-welcome__icon" });
+		setIcon(icon, "sparkles");
 		w.createDiv({ cls: "oa-welcome__title", text: "你好" });
 		w.createDiv({
 			cls: "oa-welcome__sub",
@@ -704,7 +706,10 @@ export class NotePilotView extends ItemView {
 			// 操作按钮
 			const btnRow = card.createDiv({ cls: "oa-edit-card__btns" });
 			const status = btnRow.createSpan({ cls: "oa-edit-card__status" });
-			const reject = btnRow.createEl("button", { text: "拒绝" });
+			const reject = btnRow.createEl("button", {
+				text: "拒绝",
+				cls: "oa-btn--secondary",
+			});
 			const apply = btnRow.createEl("button", {
 				text: "应用",
 				cls: "mod-cta",
